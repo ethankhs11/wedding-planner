@@ -699,238 +699,95 @@ function fbEndpoint(path) {
 }
 
 function cleanGuest(g) {
-  return {
-    id: Number(g.id),
-    name: String(g.name || ''),
-    email: String(g.email || ''),
-    rsvp: String(g.rsvp || 'Pending'),
-    meal: String(g.meal || ''),
-    table: String(g.table || ''),
-    phone: String(g.phone || ''),
-    side: String(g.side || ''),
-    fromTask: !!g.fromTask
-  };
+  return { id:Number(g.id), name:String(g.name||''), email:String(g.email||''), rsvp:String(g.rsvp||'Pending'), meal:String(g.meal||''), table:String(g.table||''), phone:String(g.phone||''), side:String(g.side||'') };
 }
-
 function cleanExpense(e) {
-  return {
-    id: Number(e.id),
-    item: String(e.item || ''),
-    cat: String(e.cat || 'Other'),
-    estimated: String(e.estimated || ''),
-    actual: String(e.actual || ''),
-    status: String(e.status || 'Planned'),
-    vendor: String(e.vendor || ''),
-    taskIdx: e.taskIdx !== null && e.taskIdx !== undefined ? Number(e.taskIdx) : null,
-    fromTask: !!e.fromTask
-  };
+  return { id:Number(e.id), item:String(e.item||''), cat:String(e.cat||'Other'), estimated:String(e.estimated||''), actual:String(e.actual||''), status:String(e.status||'Planned'), vendor:String(e.vendor||''), taskIdx:(e.taskIdx!=null)?Number(e.taskIdx):null, fromTask:!!e.fromTask };
 }
-
-// Merge two guest arrays — deduplicated by id, deleted ids excluded, local wins on conflict
-function mergeGuests(local, remote) {
-  const map = new Map();
-  const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  // Remote first
-  remoteArr.forEach(g => {
-    const id = Number(g.id);
-    if (!deletedGuests.has(id)) map.set(id, cleanGuest(g));
-  });
-  // Local overwrites (local edits win)
-  local.forEach(g => {
-    const id = Number(g.id);
-    if (!deletedGuests.has(id)) map.set(id, cleanGuest(g));
-  });
-  return [...map.values()].sort((a, b) => a.id - b.id);
+async function fbWriteGuest(g) {
+  if(!FB_URL)return;
+  try { await fetch(fbEndpoint('wpa_guests/'+g.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cleanGuest(g))}); await fbBump(); } catch(e){}
 }
-
-// Merge two expense arrays — same deduplication pattern
-function mergeExpenses(local, remote) {
-  const map = new Map();
-  const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  remoteArr.forEach(e => {
-    const id = Number(e.id);
-    if (!deletedExpenses.has(id)) map.set(id, cleanExpense(e));
-  });
-  local.forEach(e => {
-    const id = Number(e.id);
-    if (!deletedExpenses.has(id)) map.set(id, cleanExpense(e));
-  });
-  return [...map.values()].sort((a, b) => a.id - b.id);
+async function fbDeleteGuest(id) {
+  if(!FB_URL)return;
+  try { await fetch(fbEndpoint('wpa_guests/'+id),{method:'DELETE'}); await fbBump(); } catch(e){}
 }
-
+async function fbWriteExpense(e) {
+  if(!FB_URL)return;
+  try { await fetch(fbEndpoint('wpa_expenses/'+e.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cleanExpense(e))}); await fbBump(); } catch(e){}
+}
+async function fbDeleteExpense(id) {
+  if(!FB_URL)return;
+  try { await fetch(fbEndpoint('wpa_expenses/'+id),{method:'DELETE'}); await fbBump(); } catch(e){}
+}
+async function fbBump() {
+  if(!FB_URL)return;
+  const ts=new Date().toISOString();
+  await fetch(fbEndpoint('wpa_planning/lastSaved'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ts)});
+  lastRemoteHash=ts;
+}
 async function syncPush() {
-  if (!FB_URL) return;
-  setSyncStatus('busy', 'Saving…');
+  if(!FB_URL)return;
   try {
-    // 1. Read current Firebase state
-    const readResp = await fetch(fbEndpoint('wpa_data'));
-    let remote = null;
-    if (readResp.ok) {
-      remote = await readResp.json().catch(() => null);
-    }
-
-    // 2. Merge: combine remote + local, local edits win on conflicts
-    // Merge tombstones first so deleted IDs are excluded from guest/expense merge
-    const remoteDeletedGuests = Array.isArray(remote?.deletedGuests) ? remote.deletedGuests : [];
-    const remoteDeletedExpenses = Array.isArray(remote?.deletedExpenses) ? remote.deletedExpenses : [];
-    remoteDeletedGuests.forEach(id => deletedGuests.add(Number(id)));
-    remoteDeletedExpenses.forEach(id => deletedExpenses.add(Number(id)));
-
-    const mergedGuests = mergeGuests(glGuests, remote?.guests?.guests || []);
-    const mergedExpenses = mergeExpenses(expenses, remote?.expenses?.expenses || []);
-    const mergedDone = [...new Set([...(remote?.done || []), ...done])];
-    const mergedUploaded = [...new Set([...(remote?.uploadedTasks || []), ...uploadedTasks])];
-    const mergedChat = Object.assign({}, remote?.chatHistory || {}, chatHistory);
-
-    // 3. Apply merged state locally so UI stays consistent
-    glGuests = mergedGuests;
-    glNextId = Math.max(glNextId, Number(remote?.guests?.nextId) || 1);
-    expenses = mergedExpenses;
-    exNextId = Math.max(exNextId, Number(remote?.expenses?.nextId) || 1);
-    mergedDone.forEach(i => done.add(i));
-    mergedUploaded.forEach(i => uploadedTasks.add(i));
-    Object.assign(chatHistory, mergedChat);
-
-    // 4. Write merged state back to Firebase
-    const payload = {
-      done: mergedDone,
-      chatHistory: mergedChat,
-      uploadedTasks: mergedUploaded,
-      guests: { guests: mergedGuests, nextId: glNextId },
-      expenses: { expenses: mergedExpenses, nextId: exNextId },
-      deletedGuests: [...deletedGuests],
-      deletedExpenses: [...deletedExpenses],
-      lastSaved: new Date().toISOString()
-    };
-    const writeResp = await fetch(fbEndpoint('wpa_data'), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!writeResp.ok) {
-      const txt = await writeResp.text().catch(() => writeResp.status);
-      throw new Error(writeResp.status + ': ' + txt);
-    }
-
-    lastRemoteHash = payload.lastSaved;
-
-    // 5. Persist merged state to localStorage
-    try {
-      localStorage.setItem('wpa_done', JSON.stringify([...done]));
-      localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
-      localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId}));
-      localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId}));
-    } catch(e) {}
-
-    // 6. Re-render
-    buildSidebar();
-    const activeTab = document.querySelector('.top-nav-tab.active')?.id;
-    if (activeTab === 'tab-guests') glRender();
-    if (activeTab === 'tab-expenses') exRender();
-
-    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
-    setSyncStatus('on', 'Saved ' + now);
-  } catch(e) {
-    console.error('syncPush:', e);
-    setSyncStatus('err', 'Save failed — ' + e.message.slice(0, 50));
-  }
+    const payload={done:[...done],chatHistory,uploadedTasks:[...uploadedTasks],guestNextId:glNextId,expenseNextId:exNextId,lastSaved:new Date().toISOString()};
+    await fetch(fbEndpoint('wpa_planning'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    lastRemoteHash=payload.lastSaved;
+    setSyncStatus('on','Saved '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e){ setSyncStatus('err','Save failed'); }
 }
-
-function applyCleanRemote(raw) {
-  if (!raw || !raw.lastSaved) return false;
-
-  // Absorb remote tombstones first
-  if (Array.isArray(raw.deletedGuests)) raw.deletedGuests.forEach(id => deletedGuests.add(Number(id)));
-  if (Array.isArray(raw.deletedExpenses)) raw.deletedExpenses.forEach(id => deletedExpenses.add(Number(id)));
-
-  // Task progress
-  if (Array.isArray(raw.done)) raw.done.forEach(i => done.add(i));
-  if (raw.chatHistory) Object.assign(chatHistory, raw.chatHistory);
-  if (Array.isArray(raw.uploadedTasks)) raw.uploadedTasks.forEach(i => uploadedTasks.add(i));
-
-  // Guests — merge (tombstones already updated above, mergeGuests will exclude deleted)
-  if (raw.guests?.guests) {
-    glGuests = mergeGuests(glGuests, raw.guests.guests);
-    glNextId = Math.max(glNextId, Number(raw.guests.nextId) || 1);
-  }
-
-  // Expenses — same
-  if (raw.expenses?.expenses) {
-    expenses = mergeExpenses(expenses, raw.expenses.expenses);
-    exNextId = Math.max(exNextId, Number(raw.expenses.nextId) || 1);
-  }
-
-  lastRemoteHash = raw.lastSaved;
-
+async function fbPullAll() {
+  if(!FB_URL)return false;
   try {
-    localStorage.setItem('wpa_done', JSON.stringify([...done]));
-    localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
-    localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId}));
-    localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId}));
-    localStorage.setItem('wpa_deletedGuests', JSON.stringify([...deletedGuests]));
-    localStorage.setItem('wpa_deletedExpenses', JSON.stringify([...deletedExpenses]));
-  } catch(e) {}
-
-  buildSidebar();
-  if (currentIdx !== null) restoreTask(currentIdx);
-  glRender();
-  const activeTab = document.querySelector('.top-nav-tab.active')?.id;
-  if (activeTab === 'tab-expenses') exRender();
-  if (activeTab === 'tab-guests' && document.getElementById('subtab-tables')?.classList.contains('active')) glRenderTables();
-
-  return true;
+    const [gR,eR,pR]=await Promise.all([fetch(fbEndpoint('wpa_guests')),fetch(fbEndpoint('wpa_expenses')),fetch(fbEndpoint('wpa_planning'))]);
+    if(gR.ok){const raw=await gR.json(); if(raw&&typeof raw==='object'){const m=new Map(); Object.values(raw).map(cleanGuest).forEach(g=>m.set(g.id,g)); glGuests=[...m.values()].sort((a,b)=>a.id-b.id);}else{glGuests=[];}}
+    if(eR.ok){const raw=await eR.json(); if(raw&&typeof raw==='object'){const m=new Map(); Object.values(raw).map(cleanExpense).forEach(e=>m.set(e.id,e)); expenses=[...m.values()].sort((a,b)=>a.id-b.id);}else{expenses=[];}}
+    if(pR.ok){const p=await pR.json(); if(p){if(Array.isArray(p.done))p.done.forEach(i=>done.add(i)); if(p.chatHistory)Object.assign(chatHistory,p.chatHistory); if(Array.isArray(p.uploadedTasks))p.uploadedTasks.forEach(i=>uploadedTasks.add(i)); if(p.guestNextId)glNextId=Math.max(glNextId,Number(p.guestNextId)); if(p.expenseNextId)exNextId=Math.max(exNextId,Number(p.expenseNextId)); if(p.lastSaved)lastRemoteHash=p.lastSaved;}}
+    try{localStorage.setItem('wpa_guests',JSON.stringify({guests:glGuests,nextId:glNextId}));localStorage.setItem('wpa_expenses',JSON.stringify({expenses,nextId:exNextId}));localStorage.setItem('wpa_done',JSON.stringify([...done]));localStorage.setItem('wpa_chatHistory',JSON.stringify(chatHistory));}catch(e){}
+    buildSidebar(); if(currentIdx!==null)restoreTask(currentIdx); glRender();
+    const at=document.querySelector('.top-nav-tab.active')?.id;
+    if(at==='tab-expenses')exRender();
+    if(at==='tab-guests'&&document.getElementById('subtab-tables')?.classList.contains('active'))glRenderTables();
+    return true;
+  } catch(e){console.error('fbPullAll:',e);return false;}
 }
-
-// Poll every 8s — only re-renders if something changed
 async function syncPull() {
-  if (!FB_URL) return;
+  if(!FB_URL)return;
   try {
-    const resp = await fetch(fbEndpoint('wpa_data'));
-    if (!resp.ok) { const t = await resp.text().catch(()=>resp.status); throw new Error(resp.status+': '+t); }
-    const raw = await resp.json();
-    if (!raw || !raw.lastSaved || raw.lastSaved === lastRemoteHash) return;
-    applyCleanRemote(raw);
-    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
-    setSyncStatus('on', 'Synced ' + now);
-  } catch(e) {
-    setSyncStatus('err', 'Sync failed — ' + e.message.slice(0, 50));
-  }
+    const r=await fetch(fbEndpoint('wpa_planning/lastSaved'));
+    if(!r.ok)return;
+    const ts=await r.json();
+    if(!ts||ts===lastRemoteHash)return;
+    const ok=await fbPullAll();
+    if(ok)setSyncStatus('on','Synced '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e){}
 }
-
-// On page load — always fetch remote and merge into local
 async function syncForcePull() {
-  if (!FB_URL) return;
-  setSyncStatus('busy', 'Loading latest…');
+  if(!FB_URL)return;
+  setSyncStatus('busy','Loading…');
+  const ok=await fbPullAll();
+  setSyncStatus(ok?'on':'err',ok?'Synced '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}):'Could not reach Firebase');
+}
+function startSyncLoop(){if(syncInterval)clearInterval(syncInterval);syncInterval=setInterval(syncPull,5000);}
+async function saveSyncCredentials() {
+  const url=document.getElementById('fb-url').value.trim().replace(/\/$/,'');
+  const secret=document.getElementById('fb-secret').value.trim();
+  const statusEl=document.getElementById('sync-modal-status');
+  if(!url){statusEl.textContent='Please enter your Firebase database URL.';statusEl.style.color='var(--rose)';return;}
+  statusEl.textContent='Testing connection…';statusEl.style.color='var(--muted)';
   try {
-    const resp = await fetch(fbEndpoint('wpa_data'));
-    if (!resp.ok) throw new Error(resp.status);
-    const raw = await resp.json();
-    applyCleanRemote(raw);
-    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
-    setSyncStatus('on', 'Synced ' + now);
-  } catch(e) {
-    console.error('syncForcePull:', e);
-    setSyncStatus('err', 'Could not reach Firebase');
-  }
+    const ap=(secret&&secret!=='••••••••••••••••••••')?'?auth='+secret:'';
+    const r=await fetch(url+'/wpa_ping.json'+ap,{method:'PUT',headers:{'Content-Type':'application/json'},body:'"ok"'});
+    if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(r.status+' — '+t.slice(0,100));}
+    FB_URL=url; FB_SECRET=(secret&&secret!=='••••••••••••••••••••')?secret:'';
+    try{localStorage.setItem('wpa_fb_url',FB_URL);localStorage.setItem('wpa_fb_secret',FB_SECRET);}catch(e){}
+    statusEl.textContent='✓ Connected!';statusEl.style.color='var(--sage)';
+    startSyncLoop(); await syncForcePull(); setSyncStatus('on','Synced'); setTimeout(closeSyncModal,800);
+  } catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--rose)';}
+}
+function loadSyncCredentials(){
+  try{const u=localStorage.getItem('wpa_fb_url');const s=localStorage.getItem('wpa_fb_secret');if(u){FB_URL=u;FB_SECRET=s||'';setSyncStatus('busy','Loading…');startSyncLoop();syncForcePull();}}catch(e){}
 }
 
-function startSyncLoop() {
-  if (syncInterval) clearInterval(syncInterval);
-  syncInterval = setInterval(syncPull, 8000);
-}
-
-function loadSyncCredentials() {
-  try {
-    const u = localStorage.getItem('wpa_fb_url');
-    const s = localStorage.getItem('wpa_fb_secret');
-    if (u) {
-      FB_URL = u; FB_SECRET = s || '';
-      setSyncStatus('busy', 'Loading latest…');
-      startSyncLoop();
-      syncForcePull(); // always overwrite local with remote on startup
-    }
-  } catch(e) {}
-}
 
 
 const sections = [
@@ -1745,7 +1602,7 @@ function glRenderTables() {
 
 function glUpdate(id, field, val) {
   const g = glGuests.find(x => x.id === id);
-  if (g) { g[field] = val; glSaveState(); glStats(); }
+  if (g) { g[field] = val; glSaveState(); glStats(); fbWriteGuest(g); }
 }
 
 function glUpdateLive(id, field, val) {
@@ -1767,15 +1624,18 @@ function glUpdateBadge(id, val) {
 }
 
 function glRemove(id) {
-  deletedGuests.add(Number(id));
   glGuests = glGuests.filter(x => x.id !== id);
-  try { localStorage.setItem('wpa_deletedGuests', JSON.stringify([...deletedGuests])); } catch(e) {}
-  glSaveState(); glRender();
+  glSaveState();
+  glRender();
+  fbDeleteGuest(id);
 }
 
 function glAdd() {
-  glGuests.push({id: glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''});
-  glSaveState(); glRender();
+  const g = {id: glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''};
+  glGuests.push(g);
+  glSaveState();
+  glRender();
+  fbWriteGuest(g);
 }
 
 // ─── EXPENSES ────────────────────────────────────────────────
@@ -1839,11 +1699,9 @@ function exSaveState() {
 function exCreateFromTask(idx, save = true) {
   const task = allTasks[idx];
   if (!task) return;
-  expenses.push({
-    id: exNextId++, item: task.label, cat: guessCategory(task.label),
-    estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: idx, fromTask: true
-  });
-  if (save) { exSaveState(); if (document.getElementById('expense-panel').classList.contains('visible')) exRender(); }
+  const e = { id: exNextId++, item: task.label, cat: guessCategory(task.label), estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: idx, fromTask: true };
+  expenses.push(e);
+  if (save) { exSaveState(); if (document.getElementById('expense-panel').classList.contains('visible')) exRender(); fbWriteExpense(e); }
 }
 
 function exAutoAdd(idx) {
@@ -1857,9 +1715,10 @@ function exAutoAdd(idx) {
 }
 
 function exAdd() {
-  expenses.push({id: exNextId++, item: '', cat: 'Other', estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: null, fromTask: false});
+  const e = {id: exNextId++, item: '', cat: 'Other', estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: null, fromTask: false};
+  expenses.push(e);
   exSaveState(); exRender();
-  // Focus first input of new row
+  fbWriteExpense(e);
   setTimeout(() => {
     const inputs = document.querySelectorAll('#ex-tbody tr:last-child .ex-cell');
     if (inputs[0]) inputs[0].focus();
@@ -1868,14 +1727,14 @@ function exAdd() {
 
 function exUpdate(id, field, val) {
   const e = expenses.find(x => x.id === id);
-  if (e) { e[field] = field === 'estimated' || field === 'actual' ? val : val; exSaveState(); exStats(); }
+  if (e) { e[field] = val; exSaveState(); exStats(); fbWriteExpense(e); }
 }
 
 function exRemove(id) {
-  deletedExpenses.add(Number(id));
   expenses = expenses.filter(x => x.id !== id);
-  try { localStorage.setItem('wpa_deletedExpenses', JSON.stringify([...deletedExpenses])); } catch(e) {}
-  exSaveState(); exRender();
+  exSaveState();
+  exRender();
+  fbDeleteExpense(id);
 }
 
 function exStatusClass(s) {
@@ -1980,3 +1839,4 @@ function exRender() {
 </script>
 </body>
 </html>
+
