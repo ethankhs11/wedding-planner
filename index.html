@@ -724,16 +724,17 @@ async function fbBump() {
   if(!FB_URL)return;
   const ts=new Date().toISOString();
   await fetch(fbEndpoint('wpa_planning/lastSaved'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ts)});
-  lastRemoteHash=ts;
+  // Do NOT set lastRemoteHash here — let the poll detect it and do a full pull to confirm data landed
 }
 async function syncPush() {
   if(!FB_URL)return;
   try {
     const payload={done:[...done],chatHistory,uploadedTasks:[...uploadedTasks],guestNextId:glNextId,expenseNextId:exNextId,lastSaved:new Date().toISOString()};
-    await fetch(fbEndpoint('wpa_planning'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await fetch(fbEndpoint('wpa_planning'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error(r.status);
     lastRemoteHash=payload.lastSaved;
     setSyncStatus('on','Saved '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
-  } catch(e){ setSyncStatus('err','Save failed'); }
+  } catch(e){ setSyncStatus('err','Save failed: '+e.message); }
 }
 async function fbPullAll() {
   if(!FB_URL)return false;
@@ -748,18 +749,19 @@ async function fbPullAll() {
     if(at==='tab-expenses')exRender();
     if(at==='tab-guests'&&document.getElementById('subtab-tables')?.classList.contains('active'))glRenderTables();
     return true;
-  } catch(e){console.error('fbPullAll:',e);return false;}
+  } catch(e){console.error('fbPullAll:',e);setSyncStatus('err','Pull failed: '+e.message);return false;}
 }
 async function syncPull() {
   if(!FB_URL)return;
   try {
     const r=await fetch(fbEndpoint('wpa_planning/lastSaved'));
-    if(!r.ok)return;
+    if(!r.ok){setSyncStatus('err','Poll failed: '+r.status);return;}
     const ts=await r.json();
-    if(!ts||ts===lastRemoteHash)return;
+    setSyncStatus('busy','Checking… '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
+    if(!ts||ts===lastRemoteHash){setSyncStatus('on','Up to date '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));return;}
     const ok=await fbPullAll();
     if(ok)setSyncStatus('on','Synced '+new Date().toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'}));
-  } catch(e){}
+  } catch(e){setSyncStatus('err','Poll error: '+e.message);}
 }
 async function syncForcePull() {
   if(!FB_URL)return;
@@ -1839,4 +1841,3 @@ function exRender() {
 </script>
 </body>
 </html>
-
