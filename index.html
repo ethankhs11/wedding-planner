@@ -1,0 +1,1934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wedding Planner Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FAF7F2;
+    --blush: #E8D5C4;
+    --rose: #C4826A;
+    --deep: #2A1F1A;
+    --muted: #7A6A60;
+    --sage: #8A9E8C;
+    --border: rgba(42,31,26,0.1);
+    --card: #FFFCF8;
+  }
+  html { height: 100%; overflow: hidden; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--deep);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .header {
+    padding: 2rem 2.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    background: var(--card);
+  }
+  .header-title { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 300; letter-spacing: 0.02em; }
+  .header-title span { color: var(--rose); font-style: italic; }
+  .header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .drive-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--muted);
+    background: var(--cream); border: 1px solid var(--border);
+    border-radius: 99px; padding: 5px 12px;
+  }
+  .drive-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
+
+  /* Layout */
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--card);
+    overflow-y: auto;
+    padding: 1.25rem 0;
+    height: 100%;
+  }
+  .sidebar-section { margin-bottom: 0.5rem; }
+  .sidebar-group-label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); padding: 0.75rem 1.25rem 0.4rem; font-weight: 500;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 1.25rem; cursor: pointer;
+    transition: background 0.15s; font-size: 13px; color: var(--deep);
+    border-left: 2px solid transparent;
+  }
+  .sidebar-item:hover { background: var(--cream); }
+  .sidebar-item.active { background: var(--cream); border-left-color: var(--rose); color: var(--rose); font-weight: 500; }
+  .sidebar-item.done .sidebar-dot { background: var(--sage); }
+  .sidebar-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--muted); flex-shrink: 0; }
+  .sidebar-dot.done { background: var(--sage); border-color: var(--sage); }
+  .sidebar-item-tag { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: 99px; }
+  .tag-e { background: #FAECE7; color: #993C1D; }
+  .tag-o { background: #E6F1FB; color: #185FA5; }
+
+  /* Content panel */
+  .content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Task header */
+  .task-header {
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .task-phase { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; }
+  .task-title { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; font-weight: 400; }
+  .task-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn {
+    font-family: 'DM Sans', sans-serif; font-size: 12px;
+    padding: 7px 16px; border-radius: 99px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--cream);
+    color: var(--deep); transition: all 0.15s;
+  }
+  .btn:hover { background: var(--blush); }
+  .btn.primary { background: var(--rose); color: white; border-color: var(--rose); }
+  .btn.primary:hover { background: #b5725d; }
+  .btn.sage { background: var(--sage); color: white; border-color: var(--sage); }
+  .btn.sage:hover { background: #7a8e7c; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* Chat area */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 0;
+  }
+  .msg { display: flex; gap: 12px; max-width: 85%; animation: fadeIn 0.3s ease; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 500; margin-top: 2px;
+  }
+  .msg.agent .msg-avatar { background: var(--blush); color: var(--rose); }
+  .msg.user .msg-avatar { background: var(--deep); color: var(--cream); }
+  .msg-bubble {
+    padding: 12px 16px; border-radius: 16px; font-size: 13.5px;
+    line-height: 1.65; max-width: 100%;
+  }
+  .msg.agent .msg-bubble { background: var(--card); border: 1px solid var(--border); border-top-left-radius: 4px; }
+  .msg.user .msg-bubble { background: var(--deep); color: var(--cream); border-top-right-radius: 4px; }
+  .msg-bubble ul { padding-left: 1.2em; margin-top: 6px; }
+  .msg-bubble li { margin-bottom: 4px; }
+  .msg-bubble strong { font-weight: 500; }
+  .msg-bubble .doc-preview {
+    margin-top: 10px; padding: 10px 14px;
+    background: var(--cream); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 12px; color: var(--muted);
+  }
+  .doc-preview-title { font-weight: 500; color: var(--deep); margin-bottom: 3px; font-size: 13px; }
+  .upload-success {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; padding: 10px 14px;
+    background: #E1F5EE; border: 1px solid #5DCAA5;
+    border-radius: 10px; font-size: 12px; color: #0F6E56;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Typing indicator */
+  .typing { display: flex; align-items: center; gap: 5px; padding: 12px 16px; }
+  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+
+  /* Input area */
+  .input-area {
+    padding: 1rem 2rem 1.25rem;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .input-wrap { flex: 1; position: relative; }
+  textarea {
+    width: 100%; font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+    padding: 11px 14px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--cream); color: var(--deep);
+    resize: none; outline: none; line-height: 1.5; min-height: 44px; max-height: 140px;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--rose); }
+  textarea::placeholder { color: var(--muted); }
+  .send-btn {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--rose);
+    border: none; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; transition: background 0.15s;
+    color: white; font-size: 16px;
+  }
+  .send-btn:hover { background: #b5725d; }
+  .send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* Status banner */
+  .status-banner {
+    padding: 8px 2rem; font-size: 12px; display: flex;
+    align-items: center; gap: 8px; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--cream);
+  }
+  .spinner {
+    width: 12px; height: 12px; border: 1.5px solid var(--blush);
+    border-top-color: var(--rose); border-radius: 50%;
+    animation: spin 0.7s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Welcome state */
+  .welcome {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1rem; padding: 3rem; text-align: center;
+  }
+  .welcome-icon { font-size: 3rem; opacity: 0.3; }
+  .welcome-title { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-weight: 300; color: var(--muted); }
+  .welcome-sub { font-size: 13px; color: var(--muted); max-width: 320px; line-height: 1.6; }
+  .quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 0.5rem; }
+  .quick-prompt {
+    font-size: 12px; padding: 7px 14px; border-radius: 99px;
+    border: 1px solid var(--border); background: var(--card); color: var(--deep);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .quick-prompt:hover { background: var(--blush); border-color: var(--blush); }
+
+  /* Top nav tabs */
+  .top-nav {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--card); flex-shrink: 0;
+  }
+  .top-nav-tab {
+    padding: 10px 24px; font-size: 13px; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: all 0.15s; font-family: 'DM Sans', sans-serif;
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .top-nav-tab:hover { color: var(--deep); background: var(--cream); }
+  .top-nav-tab.active { color: var(--rose); border-bottom-color: var(--rose); font-weight: 500; }
+
+  /* Guest list panel */
+  #guest-panel { display: none; flex: 1; overflow-y: auto; padding: 2rem 2.5rem; width: 100%; box-sizing: border-box; }
+  #guest-panel.visible { display: block; }
+  #planner-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+
+  .gl-stats { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; margin-bottom: 1.75rem; }
+  @media (max-width: 900px) { .gl-stats { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  .gl-stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .gl-stat-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .gl-stat-value { font-size: 32px; font-weight: 300; font-family: 'Cormorant Garamond', serif; line-height: 1; }
+
+  .gl-toolbar { display: flex; gap: 10px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .gl-toolbar input[type="text"] {
+    flex: 1; min-width: 200px; font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 16px; border: 1px solid var(--border); border-radius: 99px;
+    background: var(--card); color: var(--deep); outline: none; transition: border-color 0.15s;
+  }
+  .gl-toolbar input:focus { border-color: var(--rose); }
+  .gl-toolbar select {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 16px;
+    border: 1px solid var(--border); border-radius: 99px;
+    background: var(--card); color: var(--deep); outline: none; cursor: pointer;
+  }
+
+  /* Card grid — 3 columns on wide, 2 on medium, 1 on narrow */
+  .gl-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) { .gl-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 700px)  { .gl-cards { grid-template-columns: 1fr; } }
+
+  .gl-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; transition: border-color 0.2s;
+  }
+  .gl-card:hover { border-color: var(--blush); }
+  .gl-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .gl-avatar {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--blush);
+    color: var(--rose); display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 500; flex-shrink: 0;
+  }
+  .gl-name-input {
+    flex: 1; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+    color: var(--deep); background: transparent; border: none; outline: none;
+    border-bottom: 1.5px solid transparent; transition: border-color 0.15s; padding-bottom: 2px;
+  }
+  .gl-name-input:focus { border-bottom-color: var(--rose); }
+  .gl-name-input::placeholder { color: var(--muted); font-weight: 400; }
+
+  .gl-card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .gl-field { display: flex; flex-direction: column; gap: 5px; }
+  .gl-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .gl-field-input {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--deep);
+    background: var(--cream); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 11px; outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  .gl-field-input:focus { border-color: var(--rose); }
+  .gl-field-input::placeholder { color: var(--muted); }
+  select.gl-field-input { cursor: pointer; }
+  .gl-field.full { grid-column: 1 / -1; }
+
+  .gl-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .gl-rsvp-badge {
+    display: inline-flex; align-items: center;
+    font-size: 12px; padding: 4px 12px; border-radius: 99px; font-weight: 500;
+  }
+  .gl-rsvp-confirmed { background: #E1F5EE; color: #0F6E56; }
+  .gl-rsvp-pending   { background: #FAEEDA; color: #854F0B; }
+  .gl-rsvp-declined  { background: #FAECE7; color: #993C1D; }
+  .gl-del {
+    background: none; border: 1px solid var(--border); border-radius: 99px;
+    cursor: pointer; color: var(--muted); font-size: 12px; padding: 5px 14px;
+    font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+  }
+  .gl-del:hover { background: #FAECE7; color: #993C1D; border-color: #F0997B; }
+
+  .gl-subtabs { display: flex; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+  .gl-subtab {
+    padding: 8px 20px; font-size: 13px; font-family: 'DM Sans', sans-serif;
+    color: var(--muted); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s; margin-bottom: -1px;
+  }
+  .gl-subtab:hover { color: var(--deep); }
+  .gl-subtab.active { color: var(--rose); border-bottom-color: var(--rose); font-weight: 500; }
+
+  .gl-side-bride { background: #FBEAF0; color: #72243E; font-size: 11px; padding: 3px 10px; border-radius: 99px; font-weight: 500; white-space: nowrap; }
+  .gl-side-groom { background: #E6F1FB; color: #0C447C; font-size: 11px; padding: 3px 10px; border-radius: 99px; font-weight: 500; white-space: nowrap; }
+  .gl-side-none  { background: var(--cream); color: var(--muted); font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; }
+
+  .gl-table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .gl-table-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .gl-table-header { padding: 14px 18px; background: var(--blush); display: flex; align-items: center; justify-content: space-between; }
+  .gl-table-name { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 400; color: var(--deep); }
+  .gl-table-count { font-size: 12px; color: var(--muted); background: var(--card); padding: 3px 10px; border-radius: 99px; }
+  .gl-table-row { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .gl-table-row:last-child { border-bottom: none; }
+  .gl-table-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--blush); color: var(--rose); display: flex; align-items: center; justify-content: center; font-size: 12px; font-family: 'Cormorant Garamond', serif; font-weight: 500; flex-shrink: 0; }
+  .gl-table-guest-name { flex: 1; font-size: 14px; color: var(--deep); }
+  .gl-table-unassigned { background: var(--cream); border: 1px dashed var(--border); border-radius: 14px; padding: 14px 18px; margin-top: 8px; }
+  .gl-table-unassigned-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+  /* Expenses panel */
+  #expense-panel { display: none; flex: 1; overflow-y: auto; padding: 2rem 2.5rem; width: 100%; box-sizing: border-box; }
+  #expense-panel.visible { display: block; }
+
+  .ex-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 1.75rem; }
+  .ex-stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .ex-stat-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .ex-stat-value { font-size: 26px; font-weight: 300; font-family: 'Cormorant Garamond', serif; line-height: 1; }
+  .ex-stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .ex-toolbar { display: flex; gap: 10px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .ex-toolbar input[type="text"] {
+    flex: 1; min-width: 180px; font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 16px; border: 1px solid var(--border); border-radius: 99px;
+    background: var(--card); color: var(--deep); outline: none; transition: border-color 0.15s;
+  }
+  .ex-toolbar input:focus { border-color: var(--rose); }
+  .ex-toolbar select {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 16px;
+    border: 1px solid var(--border); border-radius: 99px;
+    background: var(--card); color: var(--deep); outline: none; cursor: pointer;
+  }
+
+  .ex-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+  .ex-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+  .ex-table th {
+    text-align: left; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); padding: 11px 14px; border-bottom: 1px solid var(--border);
+    background: var(--cream); font-weight: 500; white-space: nowrap;
+  }
+  .ex-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--deep); vertical-align: middle; }
+  .ex-table tfoot td { padding: 11px 14px; background: var(--cream); font-weight: 500; font-size: 13px; border-top: 1.5px solid var(--border); border-bottom: none; }
+  .ex-table tbody tr:last-child td { border-bottom: none; }
+  .ex-table tbody tr:hover td { background: #FDF9F5; }
+  .ex-table tbody tr.from-task td:first-child::before {
+    content: '⟳'; font-size: 10px; color: var(--sage); margin-right: 5px; vertical-align: middle;
+  }
+
+  .ex-cell { width: 100%; font-size: 13.5px; font-family: 'DM Sans', sans-serif; color: var(--deep); background: transparent; border: none; outline: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+  .ex-cell:focus { border-bottom-color: var(--rose); }
+  .ex-cell::placeholder { color: var(--muted); }
+  .ex-cell-num { text-align: right; }
+  .ex-select { font-size: 12px; font-family: 'DM Sans', sans-serif; padding: 4px 8px; border: 1px solid var(--border); border-radius: 99px; background: var(--cream); color: var(--deep); outline: none; cursor: pointer; max-width: 100%; }
+  .ex-del { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 17px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
+  .ex-del:hover { color: #C4826A; }
+
+  .ex-status-planned     { background: #F1EFE8; color: #5F5E5A; font-size: 11px; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+  .ex-status-deposit     { background: #FAEEDA; color: #854F0B; font-size: 11px; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+  .ex-status-paid        { background: #E1F5EE; color: #0F6E56; font-size: 11px; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+
+  .ex-task-link { font-size: 11px; color: var(--rose); cursor: pointer; text-decoration: none; background: none; border: none; font-family: 'DM Sans', sans-serif; padding: 0; }
+  .ex-task-link:hover { text-decoration: underline; }
+  .ex-over { color: #C4826A; font-weight: 500; }
+
+  /* Progress bar */
+  .ex-progress-wrap { margin-bottom: 1.5rem; }
+  .ex-progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .ex-progress-bar { height: 6px; background: var(--blush); border-radius: 99px; overflow: hidden; }
+  .ex-progress-fill { height: 100%; background: var(--sage); border-radius: 99px; transition: width 0.4s ease; }
+  .ex-progress-fill.over { background: var(--rose); }
+
+  @media (max-width: 900px) { .ex-stats { grid-template-columns: repeat(2, 1fr); } }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .gl-stats { grid-template-columns: repeat(2, 1fr); }
+    .gl-cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">Wedding <span>Planner</span> Agent</div>
+    <div class="header-sub">AI-powered · synced for two</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+    <div style="display:flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:4px 6px 4px 14px;">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">Claude API Key</span>
+      <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" style="border:none;outline:none;background:transparent;font-size:12px;color:var(--deep);font-family:'DM Sans',sans-serif;width:150px;" />
+      <button onclick="saveKey()" style="font-size:11px;padding:5px 12px;border-radius:99px;border:1px solid var(--border);background:var(--card);color:var(--deep);cursor:pointer;font-family:'DM Sans',sans-serif;">Save</button>
+    </div>
+    <button onclick="openSyncModal()" id="sync-btn" style="display:flex;align-items:center;gap:7px;font-size:12px;padding:7px 14px;border-radius:99px;border:1px solid var(--border);background:var(--cream);color:var(--deep);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;">
+      <span id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;"></span>
+      <span id="sync-label">Set up sync</span>
+    </button>
+    <span id="key-status" style="font-size:11px;color:var(--muted);">No key</span>
+  </div>
+</div>
+
+<!-- Sync Setup Modal -->
+<div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(42,31,26,0.45);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border-radius:16px;padding:2rem;max-width:480px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.15);">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:400;margin-bottom:6px;">Sync with your partner</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.25rem;">Uses <strong>Firebase Realtime Database</strong> (free forever). Takes 3 minutes to set up once — then both of you just open the same HTML file.</p>
+
+    <div style="background:var(--cream);border-radius:10px;padding:14px 16px;margin-bottom:1.25rem;font-size:12px;color:var(--deep);line-height:1.9;">
+      <strong style="font-size:13px;">One-time setup:</strong><br>
+      1. Go to <a href="https://console.firebase.google.com" target="_blank" style="color:var(--rose);">console.firebase.google.com</a> → Add project<br>
+      2. Skip Google Analytics → Create project<br>
+      3. Left menu → <strong>Build → Realtime Database → Create database</strong><br>
+      4. Choose any region → Start in <strong>test mode</strong> → Enable<br>
+      5. Copy the database URL — looks like:<br>
+      <code style="background:var(--blush);padding:2px 6px;border-radius:4px;font-size:11px;">https://your-app-default-rtdb.firebaseio.com</code><br>
+      6. Paste it below → Save &amp; Sync → share this HTML file with your partner
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);display:block;margin-bottom:4px;">Firebase Database URL</label>
+      <input type="text" id="fb-url" placeholder="https://your-app-default-rtdb.firebaseio.com" style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--cream);color:var(--deep);outline:none;">
+      <input type="hidden" id="fb-secret" value="">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Leave the secret blank if you chose test mode (recommended).</div>
+    </div>
+
+    <div id="sync-modal-status" style="font-size:12px;color:var(--muted);min-height:18px;margin-bottom:1rem;"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeSyncModal()" style="font-size:13px;padding:8px 18px;border-radius:99px;border:1px solid var(--border);background:var(--cream);color:var(--deep);cursor:pointer;font-family:'DM Sans',sans-serif;">Cancel</button>
+      <button onclick="saveSyncCredentials()" style="font-size:13px;padding:8px 20px;border-radius:99px;border:none;background:var(--rose);color:white;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;">Save &amp; Sync</button>
+    </div>
+  </div>
+</div>
+
+<div class="top-nav">
+  <button class="top-nav-tab active" id="tab-planner" onclick="switchTab('planner')">Planning Tasks</button>
+  <button class="top-nav-tab" id="tab-guests" onclick="switchTab('guests')">Guest List</button>
+  <button class="top-nav-tab" id="tab-expenses" onclick="switchTab('expenses')">Expenses</button>
+</div>
+
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar"></div>
+
+  <!-- Content -->
+  <div class="content">
+    <div id="planner-panel" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+    <div class="status-banner" id="status-banner">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-text">Select a task to begin planning with your AI assistant</span>
+    </div>
+
+    <div id="task-header-area"></div>
+
+    <div class="chat-area" id="chat-area">
+      <div class="welcome" id="welcome-screen">
+        <div class="welcome-icon">💍</div>
+        <div class="welcome-title">Your wedding planner is ready</div>
+        <div class="welcome-sub">Select any task from the left to get personalised guidance, checklists, vendor recommendations, and save everything to your Google Drive folder.</div>
+        <div class="quick-prompts">
+          <div class="quick-prompt" onclick="selectTask(0)">Start from the beginning</div>
+          <div class="quick-prompt" onclick="startTaskByKeyword('budget')">Help with budget</div>
+          <div class="quick-prompt" onclick="startTaskByKeyword('venue')">Indoor venue ideas</div>
+          <div class="quick-prompt" onclick="startTaskByKeyword('catering')">Catering tips</div>
+          <div class="quick-prompt" onclick="startTaskByKeyword('photoshoot')">Pre-wedding photoshoot</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area" id="input-area" style="display:none;">
+      <div class="input-wrap">
+        <textarea id="user-input" placeholder="Ask your wedding planner anything about this task…" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+    </div>
+    </div><!-- /planner-panel -->
+
+    <!-- Guest List Panel -->
+    <div id="guest-panel">
+      <div class="gl-stats" id="gl-stats"></div>
+
+      <!-- Sub-tabs -->
+      <div class="gl-subtabs">
+        <button class="gl-subtab active" id="subtab-guests" onclick="glSwitchView('guests')">All Guests</button>
+        <button class="gl-subtab" id="subtab-tables" onclick="glSwitchView('tables')">By Table</button>
+      </div>
+
+      <!-- Guest view -->
+      <div id="gl-view-guests">
+        <div class="gl-toolbar">
+          <input type="text" id="gl-search" placeholder="Search guests…" oninput="glRender()">
+          <select id="gl-filter-rsvp" onchange="glRender()">
+            <option value="">All RSVPs</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Pending">Pending</option>
+            <option value="Declined">Declined</option>
+          </select>
+          <select id="gl-filter-meal" onchange="glRender()">
+            <option value="">All meals</option>
+            <option value="Standard">Standard</option>
+            <option value="Vegetarian">Vegetarian</option>
+            <option value="Vegan">Vegan</option>
+            <option value="Gluten-free">Gluten-free</option>
+          </select>
+          <select id="gl-filter-side" onchange="glRender()">
+            <option value="">Bride &amp; Groom</option>
+            <option value="Bride">Bride's side</option>
+            <option value="Groom">Groom's side</option>
+          </select>
+          <button class="btn primary" onclick="glAdd()">+ Add guest</button>
+        </div>
+        <div id="gl-cards" class="gl-cards"></div>
+      </div>
+
+      <!-- Table view -->
+      <div id="gl-view-tables" style="display:none;">
+        <div id="gl-tables"></div>
+      </div>
+
+    </div><!-- /guest-panel -->
+
+    <!-- Expenses Panel -->
+    <div id="expense-panel">
+      <!-- Summary bar -->
+      <div class="ex-stats" id="ex-stats"></div>
+      <div class="ex-progress-wrap" id="ex-progress"></div>
+
+      <!-- Toolbar -->
+      <div class="ex-toolbar">
+        <input type="text" id="ex-search" placeholder="Search expenses…" oninput="exRender()">
+        <select id="ex-filter-cat" onchange="exRender()">
+          <option value="">All categories</option>
+          <option value="Venue">Venue</option>
+          <option value="Catering">Catering</option>
+          <option value="Attire">Attire</option>
+          <option value="Photography">Photography</option>
+          <option value="Videography">Videography</option>
+          <option value="Flowers & Décor">Flowers &amp; Décor</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Hair & Makeup">Hair &amp; Makeup</option>
+          <option value="Stationery">Stationery</option>
+          <option value="Transport">Transport</option>
+          <option value="Accommodation">Accommodation</option>
+          <option value="Rings & Jewellery">Rings &amp; Jewellery</option>
+          <option value="Cake & Desserts">Cake &amp; Desserts</option>
+          <option value="Other">Other</option>
+        </select>
+        <select id="ex-filter-status" onchange="exRender()">
+          <option value="">All statuses</option>
+          <option value="Planned">Planned</option>
+          <option value="Deposit paid">Deposit paid</option>
+          <option value="Paid in full">Paid in full</option>
+        </select>
+        <button class="btn primary" onclick="exAdd()">+ Add expense</button>
+      </div>
+
+      <!-- Table -->
+      <div class="ex-table-wrap">
+        <table class="ex-table" id="ex-table">
+          <thead>
+            <tr>
+              <th style="width:22%">Item</th>
+              <th style="width:14%">Category</th>
+              <th style="width:16%">Linked task</th>
+              <th style="width:11%">Estimated (RM)</th>
+              <th style="width:11%">Actual (RM)</th>
+              <th style="width:13%">Status</th>
+              <th style="width:9%">Vendor</th>
+              <th style="width:4%"></th>
+            </tr>
+          </thead>
+          <tbody id="ex-tbody"></tbody>
+          <tfoot id="ex-tfoot"></tfoot>
+        </table>
+      </div>
+    </div><!-- /expense-panel -->
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+const FOLDER_ID = "1B-TuSHzVw5kIU4hopZGgskPxOLUYgMBn";
+const FOLDER_URL = "https://drive.google.com/drive/folders/" + FOLDER_ID;
+let API_KEY = "";
+
+function saveKey() {
+  const val = document.getElementById("api-key-input").value.trim();
+  if (!val.startsWith("sk-ant-")) { alert("Invalid key - must start with sk-ant-"); return; }
+  API_KEY = val;
+  try { localStorage.setItem('wpa_apikey', val); } catch(e) {}
+  document.getElementById("key-status").textContent = "✓ Key saved";
+  document.getElementById("key-status").style.color = "var(--sage)";
+  document.getElementById("api-key-input").value = "••••••••••••••";
+}
+
+// ─── Firebase Realtime Database Sync ──────────────────────────
+let FB_URL = '';   // e.g. https://your-app-default-rtdb.firebaseio.com
+let FB_SECRET = ''; // Database secret (optional, for private DBs)
+let syncInterval = null;
+let lastRemoteHash = '';
+
+function openSyncModal() {
+  document.getElementById('sync-modal').style.display = 'flex';
+  if (FB_URL) document.getElementById('fb-url').value = FB_URL;
+  if (FB_SECRET) document.getElementById('fb-secret').value = '••••••••••••••••••••';
+}
+function closeSyncModal() {
+  document.getElementById('sync-modal').style.display = 'none';
+}
+
+function setSyncStatus(state, msg) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  label.textContent = msg;
+  if (state === 'on')        dot.style.background = 'var(--sage)';
+  else if (state === 'busy') dot.style.background = '#BA7517';
+  else if (state === 'err')  dot.style.background = 'var(--rose)';
+  else                       dot.style.background = 'var(--muted)';
+}
+
+async function saveSyncCredentials() {
+  const url = document.getElementById('fb-url').value.trim().replace(/\/$/, '');
+  const secret = document.getElementById('fb-secret').value.trim();
+  const statusEl = document.getElementById('sync-modal-status');
+  if (!url) { statusEl.textContent = 'Please enter your Firebase database URL.'; statusEl.style.color = 'var(--rose)'; return; }
+  statusEl.textContent = 'Testing connection…'; statusEl.style.color = 'var(--muted)';
+  try {
+    const authParam = (secret && secret !== '••••••••••••••••••••') ? `?auth=${secret}` : '';
+    const testUrl = `${url}/wpa_ping.json${authParam}`;
+    const resp = await fetch(testUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '"ok"'
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(resp.status + ' — ' + (txt.slice(0, 100) || 'check your database URL'));
+    }
+    FB_URL = url;
+    FB_SECRET = (secret && secret !== '••••••••••••••••••••') ? secret : '';
+    try { localStorage.setItem('wpa_fb_url', FB_URL); localStorage.setItem('wpa_fb_secret', FB_SECRET); } catch(e) {}
+    statusEl.textContent = '✓ Connected!'; statusEl.style.color = 'var(--sage)';
+    setSyncStatus('on', 'Synced');
+    startSyncLoop();
+    await syncForcePull();
+    await syncPush();
+    setTimeout(closeSyncModal, 800);
+  } catch(e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--rose)';
+  }
+}
+
+function fbEndpoint(path) {
+  const auth = FB_SECRET ? `?auth=${FB_SECRET}` : '';
+  return `${FB_URL}/${path}.json${auth}`;
+}
+
+function cleanGuest(g) {
+  return {
+    id: Number(g.id),
+    name: String(g.name || ''),
+    email: String(g.email || ''),
+    rsvp: String(g.rsvp || 'Pending'),
+    meal: String(g.meal || ''),
+    table: String(g.table || ''),
+    phone: String(g.phone || ''),
+    side: String(g.side || ''),
+    fromTask: !!g.fromTask
+  };
+}
+
+function cleanExpense(e) {
+  return {
+    id: Number(e.id),
+    item: String(e.item || ''),
+    cat: String(e.cat || 'Other'),
+    estimated: String(e.estimated || ''),
+    actual: String(e.actual || ''),
+    status: String(e.status || 'Planned'),
+    vendor: String(e.vendor || ''),
+    taskIdx: e.taskIdx !== null && e.taskIdx !== undefined ? Number(e.taskIdx) : null,
+    fromTask: !!e.fromTask
+  };
+}
+
+// Merge two guest arrays — union by id, local edits win for existing ids
+function mergeGuests(local, remote) {
+  const map = {};
+  // Start with remote
+  const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
+  remoteArr.forEach(g => { map[g.id] = cleanGuest(g); });
+  // Local overwrites (local edits win)
+  local.forEach(g => { map[g.id] = cleanGuest(g); });
+  return Object.values(map).sort((a, b) => a.id - b.id);
+}
+
+// Merge two expense arrays — same pattern
+function mergeExpenses(local, remote) {
+  const map = {};
+  const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
+  remoteArr.forEach(e => { map[e.id] = cleanExpense(e); });
+  local.forEach(e => { map[e.id] = cleanExpense(e); });
+  return Object.values(map).sort((a, b) => a.id - b.id);
+}
+
+async function syncPush() {
+  if (!FB_URL) return;
+  setSyncStatus('busy', 'Saving…');
+  try {
+    // 1. Read current Firebase state
+    const readResp = await fetch(fbEndpoint('wpa_data'));
+    let remote = null;
+    if (readResp.ok) {
+      remote = await readResp.json().catch(() => null);
+    }
+
+    // 2. Merge: combine remote + local, local edits win on conflicts
+    const mergedGuests = mergeGuests(glGuests, remote?.guests?.guests || []);
+    const mergedExpenses = mergeExpenses(expenses, remote?.expenses?.expenses || []);
+    const mergedDone = [...new Set([...(remote?.done || []), ...done])];
+    const mergedUploaded = [...new Set([...(remote?.uploadedTasks || []), ...uploadedTasks])];
+    const mergedChat = Object.assign({}, remote?.chatHistory || {}, chatHistory);
+
+    // 3. Apply merged state locally so UI stays consistent
+    glGuests = mergedGuests;
+    glNextId = Math.max(glNextId, Number(remote?.guests?.nextId) || 1);
+    expenses = mergedExpenses;
+    exNextId = Math.max(exNextId, Number(remote?.expenses?.nextId) || 1);
+    mergedDone.forEach(i => done.add(i));
+    mergedUploaded.forEach(i => uploadedTasks.add(i));
+    Object.assign(chatHistory, mergedChat);
+
+    // 4. Write merged state back to Firebase
+    const payload = {
+      done: mergedDone,
+      chatHistory: mergedChat,
+      uploadedTasks: mergedUploaded,
+      guests: { guests: mergedGuests, nextId: glNextId },
+      expenses: { expenses: mergedExpenses, nextId: exNextId },
+      lastSaved: new Date().toISOString()
+    };
+    const writeResp = await fetch(fbEndpoint('wpa_data'), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!writeResp.ok) {
+      const txt = await writeResp.text().catch(() => writeResp.status);
+      throw new Error(writeResp.status + ': ' + txt);
+    }
+
+    lastRemoteHash = payload.lastSaved;
+
+    // 5. Persist merged state to localStorage
+    try {
+      localStorage.setItem('wpa_done', JSON.stringify([...done]));
+      localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
+      localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId}));
+      localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId}));
+    } catch(e) {}
+
+    // 6. Re-render
+    buildSidebar();
+    const activeTab = document.querySelector('.top-nav-tab.active')?.id;
+    if (activeTab === 'tab-guests') glRender();
+    if (activeTab === 'tab-expenses') exRender();
+
+    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
+    setSyncStatus('on', 'Saved ' + now);
+  } catch(e) {
+    console.error('syncPush:', e);
+    setSyncStatus('err', 'Save failed — ' + e.message.slice(0, 50));
+  }
+}
+
+function applyCleanRemote(raw) {
+  if (!raw || !raw.lastSaved) return false;
+
+  // Task progress
+  if (Array.isArray(raw.done)) raw.done.forEach(i => done.add(i));
+  if (raw.chatHistory) Object.assign(chatHistory, raw.chatHistory);
+  if (Array.isArray(raw.uploadedTasks)) raw.uploadedTasks.forEach(i => uploadedTasks.add(i));
+
+  // Guests — merge remote into local (remote adds new guests, local edits win)
+  if (raw.guests?.guests) {
+    glGuests = mergeGuests(glGuests, raw.guests.guests);
+    glNextId = Math.max(glNextId, Number(raw.guests.nextId) || 1);
+  }
+
+  // Expenses — same merge
+  if (raw.expenses?.expenses) {
+    expenses = mergeExpenses(expenses, raw.expenses.expenses);
+    exNextId = Math.max(exNextId, Number(raw.expenses.nextId) || 1);
+  }
+
+  lastRemoteHash = raw.lastSaved;
+
+  try {
+    localStorage.setItem('wpa_done', JSON.stringify([...done]));
+    localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
+    localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId}));
+    localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId}));
+  } catch(e) {}
+
+  buildSidebar();
+  if (currentIdx !== null) restoreTask(currentIdx);
+  glRender();
+  const activeTab = document.querySelector('.top-nav-tab.active')?.id;
+  if (activeTab === 'tab-expenses') exRender();
+  if (activeTab === 'tab-guests' && document.getElementById('subtab-tables')?.classList.contains('active')) glRenderTables();
+
+  return true;
+}
+
+// Poll every 8s — only re-renders if something changed
+async function syncPull() {
+  if (!FB_URL) return;
+  try {
+    const resp = await fetch(fbEndpoint('wpa_data'));
+    if (!resp.ok) { const t = await resp.text().catch(()=>resp.status); throw new Error(resp.status+': '+t); }
+    const raw = await resp.json();
+    if (!raw || !raw.lastSaved || raw.lastSaved === lastRemoteHash) return;
+    applyCleanRemote(raw);
+    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
+    setSyncStatus('on', 'Synced ' + now);
+  } catch(e) {
+    setSyncStatus('err', 'Sync failed — ' + e.message.slice(0, 50));
+  }
+}
+
+// On page load — always fetch remote and merge into local
+async function syncForcePull() {
+  if (!FB_URL) return;
+  setSyncStatus('busy', 'Loading latest…');
+  try {
+    const resp = await fetch(fbEndpoint('wpa_data'));
+    if (!resp.ok) throw new Error(resp.status);
+    const raw = await resp.json();
+    applyCleanRemote(raw);
+    const now = new Date().toLocaleTimeString('en-MY', {hour:'2-digit', minute:'2-digit'});
+    setSyncStatus('on', 'Synced ' + now);
+  } catch(e) {
+    console.error('syncForcePull:', e);
+    setSyncStatus('err', 'Could not reach Firebase');
+  }
+}
+
+function startSyncLoop() {
+  if (syncInterval) clearInterval(syncInterval);
+  syncInterval = setInterval(syncPull, 8000);
+}
+
+function loadSyncCredentials() {
+  try {
+    const u = localStorage.getItem('wpa_fb_url');
+    const s = localStorage.getItem('wpa_fb_secret');
+    if (u) {
+      FB_URL = u; FB_SECRET = s || '';
+      setSyncStatus('busy', 'Loading latest…');
+      startSyncLoop();
+      syncForcePull(); // always overwrite local with remote on startup
+    }
+  } catch(e) {}
+}
+
+
+const sections = [
+  { phase: "12+ months before", items: [
+    { label: "Set a budget and agree on total spend", tag: "essential" },
+    { label: "Decide on approximate guest count", tag: "essential" },
+    { label: "Choose a wedding date or season", tag: "essential" },
+    { label: "Draft a guest list", tag: "essential" },
+    { label: "Start indoor venue research", tag: "essential" },
+    { label: "Decide on wedding style and colour palette", tag: "optional" },
+  ]},
+  { phase: "9–12 months before", items: [
+    { label: "Book indoor venue and confirm details", tag: "essential" },
+    { label: "Confirm venue's restrictions", tag: "essential" },
+    { label: "Book officiant / solemnizer", tag: "essential" },
+    { label: "Begin dress / suit shopping", tag: "essential" },
+    { label: "Book photographer", tag: "essential" },
+    { label: "Book videographer", tag: "optional" },
+  ]},
+  { phase: "Pre-wedding photoshoot", items: [
+    { label: "Decide on photoshoot concept and style", tag: "essential" },
+    { label: "Book pre-wedding photographer", tag: "essential" },
+    { label: "Scout and confirm shoot locations", tag: "essential" },
+    { label: "Plan outfits and coordinate looks for the shoot", tag: "essential" },
+    { label: "Book hair and makeup for photoshoot day", tag: "optional" },
+    { label: "Prepare props and personal items for the shoot", tag: "optional" },
+    { label: "Schedule and complete the photoshoot session", tag: "essential" },
+    { label: "Review, select, and receive edited photos", tag: "essential" },
+    { label: "Use photos for save-the-dates or wedding display", tag: "optional" },
+  ]},
+  { phase: "6–9 months before", items: [
+    { label: "Book caterer or confirm in-house menu", tag: "essential" },
+    { label: "Book florist for indoor arrangements", tag: "essential" },
+    { label: "Book entertainment", tag: "essential" },
+    { label: "Order wedding cake or dessert display", tag: "essential" },
+    { label: "Book hair and makeup artist", tag: "essential" },
+    { label: "Arrange accommodation for out-of-town guests", tag: "optional" },
+    { label: "Book wedding night accommodation", tag: "optional" },
+  ]},
+  { phase: "4–6 months before", items: [
+    { label: "Design and send save-the-dates", tag: "essential" },
+    { label: "Finalise menu with caterer after tasting", tag: "essential" },
+    { label: "Create wedding website or comms channel", tag: "optional" },
+    { label: "Research and book honeymoon", tag: "optional" },
+    { label: "Plan seating chart layout", tag: "essential" },
+    { label: "Set up a gift registry", tag: "optional" },
+  ]},
+  { phase: "2–3 months before", items: [
+    { label: "Send formal invitations with RSVP deadline", tag: "essential" },
+    { label: "Confirm all vendor bookings and share timeline", tag: "essential" },
+    { label: "Arrange transport for wedding party", tag: "optional" },
+    { label: "Purchase wedding rings", tag: "essential" },
+    { label: "Plan ceremony programme and order of events", tag: "essential" },
+    { label: "Write or source vows", tag: "essential" },
+    { label: "First dress / suit fitting", tag: "essential" },
+  ]},
+  { phase: "1 month before", items: [
+    { label: "Finalise RSVP count and submit to caterer", tag: "essential" },
+    { label: "Finalise seating chart", tag: "essential" },
+    { label: "Prepare wedding-day emergency kit", tag: "optional" },
+    { label: "Confirm floor plan and lighting with venue", tag: "essential" },
+    { label: "Final dress / suit fitting and pickup", tag: "essential" },
+    { label: "Prepare payments or envelopes for vendors", tag: "essential" },
+    { label: "Assign a trusted day-of coordinator", tag: "essential" },
+  ]},
+  { phase: "Week before", items: [
+    { label: "Reconfirm all vendors with final schedule", tag: "essential" },
+    { label: "Deliver décor items and favours to venue", tag: "essential" },
+    { label: "Hold rehearsal with wedding party", tag: "essential" },
+    { label: "Attend rehearsal dinner", tag: "optional" },
+    { label: "Get a good night's sleep", tag: "essential" },
+  ]},
+  { phase: "Wedding day", items: [
+    { label: "Start hair and makeup on schedule", tag: "essential" },
+    { label: "Coordinator checks venue setup and vendors", tag: "essential" },
+    { label: "Couple has a moment alone before guests arrive", tag: "optional" },
+    { label: "Ceremony — exchange vows and rings", tag: "essential" },
+    { label: "Photography — portraits and group shots", tag: "essential" },
+    { label: "Welcome guests to reception, first dance, speeches", tag: "essential" },
+    { label: "Dinner, dessert, and cake cutting", tag: "essential" },
+    { label: "Collect cards, gifts, and personal items", tag: "essential" },
+  ]},
+];
+
+// Flatten
+const allTasks = [];
+sections.forEach(sec => sec.items.forEach(item => allTasks.push({ ...item, phase: sec.phase })));
+
+// --- Persistence helpers ---
+let syncPushTimer = null;
+function saveState() {
+  try {
+    localStorage.setItem('wpa_done', JSON.stringify([...done]));
+    localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
+    localStorage.setItem('wpa_uploaded', JSON.stringify([...uploadedTasks]));
+    localStorage.setItem('wpa_profile', JSON.stringify(weddingProfile));
+    if (currentIdx !== null) localStorage.setItem('wpa_currentIdx', currentIdx);
+  } catch(e) {}
+  // Debounce push: wait 1.5s after last change before pushing
+  clearTimeout(syncPushTimer);
+  syncPushTimer = setTimeout(syncPush, 1500);
+}
+
+function loadState() {
+  try {
+    const d = localStorage.getItem('wpa_done');
+    if (d) JSON.parse(d).forEach(i => done.add(i));
+    const ch = localStorage.getItem('wpa_chatHistory');
+    if (ch) Object.assign(chatHistory, JSON.parse(ch));
+    const up = localStorage.getItem('wpa_uploaded');
+    if (up) JSON.parse(up).forEach(i => uploadedTasks.add(i));
+    const ci = localStorage.getItem('wpa_currentIdx');
+    if (ci !== null) currentIdx = parseInt(ci);
+    const key = localStorage.getItem('wpa_apikey');
+    if (key) {
+      API_KEY = key;
+      document.getElementById('key-status').textContent = '✓ Key saved';
+      document.getElementById('key-status').style.color = 'var(--sage)';
+      document.getElementById('api-key-input').value = '••••••••••••••';
+    }
+    const prof = localStorage.getItem('wpa_profile');
+    if (prof) Object.assign(weddingProfile, JSON.parse(prof));
+  } catch(e) {}
+}
+
+const done = new Set();
+let currentIdx = null;
+let chatHistory = {};
+let isLoading = false;
+let uploadedTasks = new Set();
+// Guest list state — declared here so sync functions can access them immediately
+const GL_RSVP = ['Confirmed','Pending','Declined'];
+const GL_MEAL = ['Standard','Vegetarian','Vegan','Gluten-free'];
+let glGuests = [];
+let glNextId = 1;
+// Expense state — declared here so sync functions can access them immediately
+const EX_STATUS = ['Planned', 'Deposit paid', 'Paid in full'];
+const EX_CATS = ['Venue','Catering','Attire','Photography','Videography','Flowers & Décor','Entertainment','Hair & Makeup','Stationery','Transport','Accommodation','Rings & Jewellery','Cake & Desserts','Other'];
+let expenses = [];
+let exNextId = 1;
+// Shared wedding profile — built up as couple answers questions
+let weddingProfile = {
+  guestCount: "~30 guests",
+  style: "small intimate indoor wedding",
+  location: "Malaysia",
+  notes: {}  // keyed by task idx — stores key facts discovered per task
+};
+
+// --- Restore a task view without re-triggering agent ---
+function restoreTask(idx) {
+  const task = allTasks[idx];
+  if (!task) return;
+  const tha = document.getElementById('task-header-area');
+  tha.innerHTML = `
+    <div class="task-header">
+      <div class="task-phase">${task.phase}</div>
+      <div class="task-title">${task.label}</div>
+      <div class="task-actions">
+        <button class="btn" onclick="quickPrompt('Give me a detailed step-by-step plan for this task with specific advice for a small indoor wedding in Malaysia.')">📋 Get full plan</button>
+        <button class="btn" onclick="quickPrompt('What are the most important things to consider and common mistakes to avoid for this task?')">⚠️ Key considerations</button>
+        <button class="btn" onclick="quickPrompt('Give me a vendor recommendation template and evaluation checklist for this task.')">🏢 Vendor checklist</button>
+        <button class="btn sage" id="upload-btn-${idx}" onclick="uploadTaskDoc(${idx})">☁️ ${uploadedTasks.has(idx) ? 'Re-upload to Drive' : 'Save to Drive'}</button>
+        <button class="btn primary" onclick="markDone(${idx})">✓ Mark complete</button>
+      </div>
+    </div>`;
+  document.getElementById('welcome-screen')?.remove();
+  document.getElementById('input-area').style.display = 'flex';
+  renderHistory(idx);
+}
+
+// --- Build sidebar ---
+function buildSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+  sections.forEach((sec, si) => {
+    const gl = document.createElement('div');
+    gl.className = 'sidebar-section';
+    const label = document.createElement('div');
+    label.className = 'sidebar-group-label';
+    label.textContent = sec.phase;
+    gl.appendChild(label);
+    sec.items.forEach((item, ii) => {
+      const globalIdx = sections.slice(0, si).reduce((a, s) => a + s.items.length, 0) + ii;
+      const el = document.createElement('div');
+      el.className = 'sidebar-item' + (done.has(globalIdx) ? ' done' : '') + (currentIdx === globalIdx ? ' active' : '');
+      el.id = 'sb-' + globalIdx;
+      el.onclick = () => selectTask(globalIdx);
+      el.innerHTML = `<div class="sidebar-dot ${done.has(globalIdx) ? 'done' : ''}"></div>
+        <span style="flex:1;">${item.label}</span>
+        <span class="sidebar-item-tag ${item.tag === 'essential' ? 'tag-e' : 'tag-o'}">${item.tag === 'essential' ? 'E' : 'O'}</span>`;
+      gl.appendChild(el);
+    });
+    sb.appendChild(gl);
+  });
+}
+
+function startTaskByKeyword(kw) {
+  const idx = allTasks.findIndex(t => t.label.toLowerCase().includes(kw));
+  if (idx >= 0) selectTask(idx);
+}
+
+function selectTask(idx) {
+  currentIdx = idx;
+  const task = allTasks[idx];
+  try { localStorage.setItem('wpa_currentIdx', idx); } catch(e) {}
+  buildSidebar();
+
+  // Show task header
+  const tha = document.getElementById('task-header-area');
+  tha.innerHTML = `
+    <div class="task-header">
+      <div class="task-phase">${task.phase}</div>
+      <div class="task-title">${task.label}</div>
+      <div class="task-actions">
+        <button class="btn" onclick="quickPrompt('Give me a detailed step-by-step plan for this task with specific advice for a small indoor wedding in Malaysia.')">📋 Get full plan</button>
+        <button class="btn" onclick="quickPrompt('What are the most important things to consider and common mistakes to avoid for this task?')">⚠️ Key considerations</button>
+        <button class="btn" onclick="quickPrompt('Give me a vendor recommendation template and evaluation checklist for this task.')">🏢 Vendor checklist</button>
+        <button class="btn sage" id="upload-btn-${idx}" onclick="uploadTaskDoc(${idx})">☁️ ${uploadedTasks.has(idx) ? 'Re-upload to Drive' : 'Save to Drive'}</button>
+        <button class="btn primary" onclick="markDone(${idx})">✓ Mark complete</button>
+      </div>
+    </div>`;
+
+  // Show chat for this task (or start fresh)
+  const ca = document.getElementById('chat-area');
+  document.getElementById('welcome-screen')?.remove();
+  ca.innerHTML = '';
+  document.getElementById('input-area').style.display = 'flex';
+
+  if (!chatHistory[idx]) {
+    chatHistory[idx] = [];
+    // Auto-start
+    setTimeout(() => {
+      autoStart(idx);
+    }, 300);
+  } else {
+    renderHistory(idx);
+  }
+}
+
+function renderHistory(idx) {
+  const ca = document.getElementById('chat-area');
+  ca.innerHTML = '';
+  (chatHistory[idx] || []).forEach(msg => appendBubble(msg.role, msg.html, false));
+}
+
+function autoStart(idx) {
+  const task = allTasks[idx];
+  const prompt = `I'm planning a small indoor wedding (around 30 guests) in Malaysia. Help me with this specific task: "${task.label}" (phase: ${task.phase}). 
+
+Give me:
+1. A brief overview of what this task involves
+2. 3-5 concrete action steps specific to a small indoor wedding
+3. Any Malaysia-specific tips or considerations (venues, vendors, regulations, traditions)
+4. A realistic timeline or deadline suggestion for this task
+
+Be warm, practical, and specific. Format clearly.`;
+  callAgent(prompt, idx, true);
+}
+
+function sendMessage() {
+  const input = document.getElementById('user-input');
+  const text = input.value.trim();
+  if (!text || isLoading || currentIdx === null) return;
+  input.value = '';
+  autoResize(input);
+  callAgent(text, currentIdx, false);
+}
+
+function quickPrompt(text) {
+  callAgent(text, currentIdx, false);
+}
+
+// Build a context summary of everything known so far
+function buildContext() {
+  var completedLabels = [];
+  done.forEach(function(i) { if (allTasks[i]) completedLabels.push(allTasks[i].label); });
+  var remainingLabels = [];
+  allTasks.forEach(function(t, i) { if (!done.has(i)) remainingLabels.push(t.label); });
+  var pct = Math.round(done.size / allTasks.length * 100);
+  var taskNotes = [];
+  done.forEach(function(i) {
+    var hist = chatHistory[i];
+    if (!hist) return;
+    var lastAgent = null;
+    for (var x = hist.length - 1; x >= 0; x--) {
+      if (hist[x].role === 'agent' && hist[x].text && hist[x].text.length > 40) { lastAgent = hist[x]; break; }
+    }
+    if (lastAgent) {
+      var snippet = lastAgent.text.replace(new RegExp('<[^>]+>', 'g'), '').substring(0, 200).trim();
+      taskNotes.push('- [' + (allTasks[i] ? allTasks[i].label : '') + ']: ' + snippet + '...');
+    }
+  });
+  var profileNoteLines = [];
+  var notes = weddingProfile.notes || {};
+  Object.keys(notes).forEach(function(k) {
+    profileNoteLines.push('- ' + (allTasks[k] ? allTasks[k].label : k) + ': ' + notes[k]);
+  });
+  var out = [];
+  out.push('=== WEDDING PROFILE ===');
+  out.push('Couple: Planning a ' + weddingProfile.style + ' in ' + weddingProfile.location);
+  out.push('Guest count: ' + weddingProfile.guestCount);
+  if (profileNoteLines.length) { out.push('Known details:'); profileNoteLines.forEach(function(l){ out.push(l); }); }
+  out.push('');
+  out.push('=== PLANNING PROGRESS ===');
+  out.push('Overall: ' + done.size + '/' + allTasks.length + ' tasks complete (' + pct + '%)');
+  out.push('Completed: ' + (completedLabels.length ? completedLabels.join(', ') : 'None yet'));
+  out.push('Remaining: ' + remainingLabels.slice(0, 10).join(', ') + (remainingLabels.length > 10 ? '...' : ''));
+  out.push('');
+  out.push('=== RECENT TASK NOTES ===');
+  if (taskNotes.length) { taskNotes.forEach(function(n){ out.push(n); }); } else { out.push('No prior notes yet.'); }
+  return out.join('\n');
+}
+
+// Extract and save key facts from agent response into weddingProfile
+function extractProfileFacts(idx, agentText) {
+  var raw = agentText.replace(new RegExp('<[^>]+>', 'g'), '');
+  weddingProfile.notes = weddingProfile.notes || {};
+  weddingProfile.notes[idx] = raw.substring(0, 300).trim();
+  var guestMatch = raw.match(/([0-9]{1,3}) guests/i);
+  if (guestMatch) weddingProfile.guestCount = guestMatch[1] + ' guests';
+}
+async function callAgent(userText, idx, isAuto) {
+  if (isLoading) return;
+  if (!API_KEY) {
+    appendBubble('agent', '<p style="color:var(--rose)">Please paste your Anthropic API key in the field at the top-right and click <strong>Save</strong> first.</p>');
+    return;
+  }
+  isLoading = true;
+  setStatus('thinking', 'AI planner is thinking…');
+
+  if (!isAuto) {
+    const userHtml = `<p>${escHtml(userText)}</p>`;
+    appendBubble('user', userHtml);
+    chatHistory[idx] = chatHistory[idx] || [];
+    chatHistory[idx].push({ role: 'user', html: userHtml, text: userText });
+    saveState();
+  }
+
+  // Typing indicator
+  const typingId = 'typing-' + Date.now();
+  const typingEl = document.createElement('div');
+  typingEl.className = 'msg agent';
+  typingEl.id = typingId;
+  typingEl.innerHTML = `<div class="msg-avatar">W</div><div class="msg-bubble"><div class="typing"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+  document.getElementById('chat-area').appendChild(typingEl);
+  scrollChat();
+
+  try {
+    const context = buildContext();
+    const task = allTasks[idx];
+
+    // System prompt always carries full context
+    var systemLines = [];
+    systemLines.push('You are a warm, experienced wedding planner for a couple in Malaysia planning a small intimate indoor wedding.');
+    systemLines.push('');
+    systemLines.push(context);
+    systemLines.push('');
+    systemLines.push('=== YOUR ROLE ===');
+    systemLines.push('You are helping with the CURRENT task: "' + task.label + '" (phase: ' + task.phase + ')');
+    systemLines.push('');
+    systemLines.push('CRITICAL RULES:');
+    systemLines.push('- You already know their progress above - NEVER ask questions already answered in prior tasks');
+    systemLines.push('- Reference completed tasks naturally when relevant (e.g. Since you have already booked your venue...)');
+    systemLines.push('- Build on what you know - do not start from scratch on every task');
+    systemLines.push('- Be specific to Malaysia: use RM for costs, reference local vendors, JPN/ROM registration, Malaysian customs');
+    systemLines.push('- Keep responses focused and actionable. Use numbered steps and bullet points.');
+    systemLines.push('- If a decision from a prior task affects the current one, mention it directly');
+    var systemPrompt = systemLines.join('\n');
+
+    // Full conversation history for this task (include autoStart messages too)
+    const history = (chatHistory[idx] || []).map(m => ({
+      role: m.role === 'agent' ? 'assistant' : 'user',
+      content: (m.text || m.html.replace(/<[^>]+>/g, '')).trim()
+    })).filter(m => m.content.length > 0);
+
+    // For autoStart, just send the prompt. Otherwise send full history.
+    const messages = isAuto
+      ? [{ role: 'user', content: userText }]
+      : history.length > 0 ? history : [{ role: 'user', content: userText }];
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'x-api-key': API_KEY
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || 'Sorry, I could not get a response. Please try again.';
+
+    typingEl.remove();
+    const html = formatAgentText(text);
+    appendBubble('agent', html);
+
+    chatHistory[idx] = chatHistory[idx] || [];
+    chatHistory[idx].push({ role: 'agent', html, text, isAuto });
+    extractProfileFacts(idx, text);
+    saveState();
+
+    setStatus('idle', `Task: ${task.label}`);
+  } catch (e) {
+    typingEl.remove();
+    appendBubble('agent', `<p>Something went wrong: ${escHtml(e.message)}. Please try again.</p>`);
+    setStatus('idle', 'Error - please retry');
+  }
+
+  isLoading = false;
+}
+
+async function uploadTaskDoc(idx) {
+  const task = allTasks[idx];
+  const history = chatHistory[idx] || [];
+  if (history.length === 0) {
+    alert('Please chat with the planner about this task first before saving to Drive.');
+    return;
+  }
+
+  setStatus('uploading', 'Saving task notes to Google Drive…');
+  const btn = document.getElementById('upload-btn-' + idx);
+  if (btn) btn.disabled = true;
+
+  // Build doc content
+  let docContent = `WEDDING PLANNING NOTES\n${'='.repeat(50)}\n\n`;
+  docContent += `Task: ${task.label}\nPhase: ${task.phase}\nType: ${task.tag}\n`;
+  docContent += `Saved: ${new Date().toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })}\n\n`;
+  docContent += `${'─'.repeat(50)}\n\n`;
+
+  history.forEach(msg => {
+    const prefix = msg.role === 'user' ? '[ YOU ]\n' : '[ WEDDING PLANNER ]\n';
+    const text = (msg.text || msg.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')).trim();
+    docContent += prefix + text + '\n\n';
+  });
+
+  docContent += `\n${'─'.repeat(50)}\n`;
+  docContent += `Drive Folder: ${FOLDER_URL}\n`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'x-api-key': API_KEY
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'You are a helpful assistant. Respond only with valid JSON, no markdown.',
+        messages: [{
+          role: 'user',
+          content: `I need to save a wedding planning document to Google Drive folder ID: ${FOLDER_ID}
+          
+The document content is:
+${docContent.substring(0, 800)}...
+
+Please confirm with JSON: {"status": "ready", "filename": "${task.label.replace(/[^a-zA-Z0-9 ]/g, '').trim()}.txt", "folder": "${FOLDER_ID}", "message": "Document prepared for upload to Google Drive folder ${FOLDER_ID}. The file '${task.label}' planning notes are ready."}`
+        }]
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || '{}';
+    let result;
+    try { result = JSON.parse(text.replace(/```json|```/g, '').trim()); } catch { result = {}; }
+
+    uploadedTasks.add(idx);
+    if (btn) { btn.disabled = false; btn.textContent = '☁️ Re-upload to Drive'; }
+
+    // Show success message in chat
+    const filename = `${task.label.replace(/[^a-zA-Z0-9 ]/g, '').trim()}.txt`;
+    const successHtml = `<p>Your planning notes for <strong>${escHtml(task.label)}</strong> have been prepared for your Google Drive folder.</p>
+<div class="upload-success">
+  ✓ &nbsp;Ready to save: <strong>${escHtml(filename)}</strong>
+</div>
+<div class="doc-preview">
+  <div class="doc-preview-title">📁 Google Drive Folder</div>
+  <a href="${FOLDER_URL}" target="_blank" style="color: #185FA5; text-decoration: none; font-size: 12px;">Open Drive folder ↗</a><br>
+  <span style="font-size: 11px; margin-top: 4px; display:block;">Note: To complete the upload, open the Drive link and drag-and-drop the document, or use Google Drive's upload button. Browser security prevents direct file creation from this interface.</span>
+</div>`;
+    appendBubble('agent', successHtml);
+    chatHistory[idx].push({ role: 'agent', html: successHtml, text: 'Upload prepared.' });
+
+    setStatus('idle', `Notes prepared for Drive: ${task.label}`);
+
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    setStatus('idle', 'Upload preparation failed');
+    appendBubble('agent', `<p>Could not prepare the document. Error: ${escHtml(e.message)}</p>`);
+  }
+}
+
+function markDone(idx) {
+  done.add(idx);
+  buildSidebar();
+  appendBubble('agent', `<p>✓ <strong>${escHtml(allTasks[idx].label)}</strong> marked as complete! Well done — you're making great progress. Ready to move on to the next task?</p>`);
+  chatHistory[idx] = chatHistory[idx] || [];
+  chatHistory[idx].push({ role: 'agent', html: '', text: 'Task marked complete.' });
+  saveState();
+  exAutoAdd(idx);
+}
+
+// --- Helpers ---
+function appendBubble(role, html, scroll = true) {
+  const ca = document.getElementById('chat-area');
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  el.innerHTML = `<div class="msg-avatar">${role === 'agent' ? 'W' : 'Y'}</div><div class="msg-bubble">${html}</div>`;
+  ca.appendChild(el);
+  if (scroll) scrollChat();
+}
+
+function scrollChat() {
+  const ca = document.getElementById('chat-area');
+  setTimeout(() => ca.scrollTo({ top: ca.scrollHeight, behavior: 'smooth' }), 50);
+}
+
+function setStatus(state, msg) {
+  document.getElementById('status-text').textContent = msg;
+  const spinner = document.getElementById('spinner');
+  spinner.style.display = (state === 'thinking' || state === 'uploading') ? 'block' : 'none';
+}
+
+function formatAgentText(text) {
+  let h = escHtml(text);
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  h = h.replace(new RegExp('^(\\d+)\\. (.+)$', 'gm'), '<li>$2</li>').replace(new RegExp('(<li>.*<\/li>\n?)+', 'g'), '<ol>$&</ol>');
+  h = h.replace(new RegExp('^[-•] (.+)$', 'gm'), '<li>$1</li>').replace(new RegExp('(<li>.*<\/li>\n?)+', 'g'), match => match.startsWith('<ol>') ? match : '<ul>' + match + '</ul>');
+  h = h.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+  return '<p>' + h + '</p>';
+}
+
+function escHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(new RegExp('<','g'),'&lt;').replace(new RegExp('>','g'),'&gt;').replace(/"/g,'&quot;');
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+// Init — load local state, then connect sync if configured
+loadState();
+buildSidebar();
+if (currentIdx !== null) restoreTask(currentIdx);
+glLoadState();
+exLoadState();
+loadSyncCredentials();
+
+// --- Tab switching ---
+function switchTab(tab) {
+  const plannerPanel = document.getElementById('planner-panel');
+  const guestPanel = document.getElementById('guest-panel');
+  const expensePanel = document.getElementById('expense-panel');
+  const sidebar = document.querySelector('.sidebar');
+  const tabPlanner = document.getElementById('tab-planner');
+  const tabGuests = document.getElementById('tab-guests');
+  const tabExpenses = document.getElementById('tab-expenses');
+
+  // Hide all panels
+  plannerPanel.style.display = 'none';
+  guestPanel.classList.remove('visible');
+  expensePanel.classList.remove('visible');
+  [tabPlanner, tabGuests, tabExpenses].forEach(t => t && t.classList.remove('active'));
+
+  if (tab === 'planner') {
+    plannerPanel.style.display = 'flex';
+    sidebar.style.display = '';
+    document.querySelector('.main').style.gridTemplateColumns = '300px 1fr';
+    tabPlanner.classList.add('active');
+  } else if (tab === 'guests') {
+    guestPanel.classList.add('visible');
+    sidebar.style.display = 'none';
+    document.querySelector('.main').style.gridTemplateColumns = '1fr';
+    tabGuests.classList.add('active');
+    glRender();
+  } else if (tab === 'expenses') {
+    expensePanel.classList.add('visible');
+    sidebar.style.display = 'none';
+    document.querySelector('.main').style.gridTemplateColumns = '1fr';
+    tabExpenses.classList.add('active');
+    exRender();
+  }
+}
+
+// --- Guest List ---
+
+function glLoadState() {
+  try {
+    const raw = localStorage.getItem('wpa_guests');
+    if (raw) { const parsed = JSON.parse(raw); glGuests = parsed.guests || []; glNextId = parsed.nextId || glGuests.length + 1; }
+  } catch(e) {}
+  if (glGuests.length === 0) {
+    glGuests = [
+      {id:glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''},
+    ];
+  }
+  glGuests.forEach(g => { if (!g.side) g.side = ''; });
+}
+
+function glSaveState() {
+  try { localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId})); } catch(e) {}
+}
+
+function glStats() {
+  const total = glGuests.length;
+  const confirmed = glGuests.filter(g => g.rsvp === 'Confirmed').length;
+  const pending = glGuests.filter(g => g.rsvp === 'Pending').length;
+  const declined = glGuests.filter(g => g.rsvp === 'Declined').length;
+  const bride = glGuests.filter(g => g.side === 'Bride').length;
+  const groom = glGuests.filter(g => g.side === 'Groom').length;
+  document.getElementById('gl-stats').innerHTML = `
+    <div class="gl-stat"><div class="gl-stat-label">Total guests</div><div class="gl-stat-value">${total}</div></div>
+    <div class="gl-stat"><div class="gl-stat-label">Confirmed</div><div class="gl-stat-value" style="color:var(--sage)">${confirmed}</div></div>
+    <div class="gl-stat"><div class="gl-stat-label">Pending</div><div class="gl-stat-value" style="color:#BA7517">${pending}</div></div>
+    <div class="gl-stat"><div class="gl-stat-label">Declined</div><div class="gl-stat-value" style="color:var(--rose)">${declined}</div></div>
+    <div class="gl-stat"><div class="gl-stat-label">Bride's side</div><div class="gl-stat-value" style="color:#72243E">${bride}</div></div>
+    <div class="gl-stat"><div class="gl-stat-label">Groom's side</div><div class="gl-stat-value" style="color:#185FA5">${groom}</div></div>
+  `;
+}
+
+function glInitials(name) {
+  const n = String(name || '').trim();
+  if (!n) return '?';
+  const parts = n.split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function glRsvpClass(rsvp) {
+  if (rsvp === 'Confirmed') return 'gl-rsvp-confirmed';
+  if (rsvp === 'Declined') return 'gl-rsvp-declined';
+  return 'gl-rsvp-pending';
+}
+
+let glCurrentView = 'guests';
+
+function glSwitchView(view) {
+  glCurrentView = view;
+  document.getElementById('gl-view-guests').style.display = view === 'guests' ? '' : 'none';
+  document.getElementById('gl-view-tables').style.display = view === 'tables' ? '' : 'none';
+  document.getElementById('subtab-guests').classList.toggle('active', view === 'guests');
+  document.getElementById('subtab-tables').classList.toggle('active', view === 'tables');
+  if (view === 'tables') glRenderTables();
+}
+
+function glSideBadge(side) {
+  if (side === 'Bride') return '<span class="gl-side-bride">Bride\'s side</span>';
+  if (side === 'Groom') return '<span class="gl-side-groom">Groom\'s side</span>';
+  return '<span class="gl-side-none">Unassigned</span>';
+}
+
+function glRender() {
+  const q = (document.getElementById('gl-search')?.value || '').toLowerCase();
+  const fr = document.getElementById('gl-filter-rsvp')?.value || '';
+  const fm = document.getElementById('gl-filter-meal')?.value || '';
+  const fs = document.getElementById('gl-filter-side')?.value || '';
+  const filtered = glGuests.filter(g => {
+    const match = g.name.toLowerCase().includes(q) || g.email.toLowerCase().includes(q);
+    return match && (!fr || g.rsvp === fr) && (!fm || g.meal === fm) && (!fs || g.side === fs);
+  });
+  const container = document.getElementById('gl-cards');
+  if (!container) return;
+  container.innerHTML = filtered.map(g => `
+    <div class="gl-card" id="glcard-${g.id}">
+      <div class="gl-card-top">
+        <div class="gl-avatar" id="gla-${g.id}">${escHtml(glInitials(g.name))}</div>
+        <input class="gl-name-input" value="${escHtml(g.name)}" placeholder="Guest name"
+          oninput="glUpdateLive(${g.id},'name',this.value)"
+          onchange="glUpdate(${g.id},'name',this.value)">
+        <span class="gl-rsvp-badge ${glRsvpClass(g.rsvp)}" id="glbadge-${g.id}">${escHtml(g.rsvp)}</span>
+      </div>
+      <div class="gl-card-fields">
+        <div class="gl-field full">
+          <div class="gl-field-label">Email</div>
+          <input class="gl-field-input" type="email" value="${escHtml(g.email)}" placeholder="email@example.com"
+            onchange="glUpdate(${g.id},'email',this.value)">
+        </div>
+        <div class="gl-field">
+          <div class="gl-field-label">Phone</div>
+          <input class="gl-field-input" type="tel" value="${escHtml(g.phone)}" placeholder="+6012-345 6789"
+            onchange="glUpdate(${g.id},'phone',this.value)">
+        </div>
+        <div class="gl-field">
+          <div class="gl-field-label">Table</div>
+          <input class="gl-field-input" value="${escHtml(g.table)}" placeholder="e.g. T1"
+            onchange="glUpdate(${g.id},'table',this.value);if(glCurrentView==='tables')glRenderTables()">
+        </div>
+        <div class="gl-field">
+          <div class="gl-field-label">RSVP</div>
+          <select class="gl-field-input" onchange="glUpdate(${g.id},'rsvp',this.value);glUpdateBadge(${g.id},this.value)">
+            ${GL_RSVP.map(o => `<option value="${o}" ${g.rsvp===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="gl-field">
+          <div class="gl-field-label">Meal preference</div>
+          <select class="gl-field-input" onchange="glUpdate(${g.id},'meal',this.value)">
+            <option value="">No preference</option>
+            ${GL_MEAL.map(o => `<option value="${o}" ${g.meal===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="gl-field">
+          <div class="gl-field-label">Side</div>
+          <select class="gl-field-input" onchange="glUpdate(${g.id},'side',this.value);glUpdateSideBadge(${g.id},this.value)">
+            <option value="" ${!g.side?'selected':''}>— Unassigned —</option>
+            <option value="Bride" ${g.side==='Bride'?'selected':''}>Bride's side</option>
+            <option value="Groom" ${g.side==='Groom'?'selected':''}>Groom's side</option>
+          </select>
+        </div>
+      </div>
+      <div class="gl-card-footer">
+        <span id="glside-${g.id}">${glSideBadge(g.side)}</span>
+        <button class="gl-del" onclick="glRemove(${g.id})">Remove guest</button>
+      </div>
+    </div>
+  `).join('');
+  glStats();
+}
+
+function glUpdateSideBadge(id, val) {
+  const el = document.getElementById('glside-' + id);
+  if (el) el.innerHTML = glSideBadge(val);
+}
+
+function glRenderTables() {
+  const container = document.getElementById('gl-tables');
+  if (!container) return;
+
+  const assigned = glGuests.filter(g => String(g.table || '').trim());
+  const unassigned = glGuests.filter(g => !String(g.table || '').trim());
+
+  // Group by table, sorted naturally
+  const tableMap = {};
+  assigned.forEach(g => {
+    const t = String(g.table).trim();
+    if (!tableMap[t]) tableMap[t] = [];
+    tableMap[t].push(g);
+  });
+  const tableKeys = Object.keys(tableMap).sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g,'')) || 0, nb = parseInt(b.replace(/\D/g,'')) || 0;
+    return na !== nb ? na - nb : a.localeCompare(b);
+  });
+
+  let html = '<div class="gl-table-grid">';
+  tableKeys.forEach(tname => {
+    const members = tableMap[tname];
+    html += `
+      <div class="gl-table-card">
+        <div class="gl-table-header">
+          <span class="gl-table-name">Table ${escHtml(tname)}</span>
+          <span class="gl-table-count">${members.length} guest${members.length !== 1 ? 's' : ''}</span>
+        </div>
+        ${members.map(g => `
+          <div class="gl-table-row">
+            <div class="gl-table-avatar">${escHtml(glInitials(g.name))}</div>
+            <span class="gl-table-guest-name">${escHtml(String(g.name || '')) || '<span style="color:var(--muted);font-style:italic">Unnamed</span>'}</span>
+            <span class="gl-rsvp-badge ${glRsvpClass(g.rsvp)}" style="font-size:11px;padding:2px 8px;">${escHtml(g.rsvp)}</span>
+            ${g.side ? `<span class="${g.side==='Bride'?'gl-side-bride':'gl-side-groom'}" style="font-size:10px;padding:2px 7px;">${escHtml(g.side)}</span>` : ''}
+          </div>
+        `).join('')}
+      </div>`;
+  });
+  html += '</div>';
+
+  if (unassigned.length > 0) {
+    html += `<div class="gl-table-unassigned" style="margin-top:16px;">
+      <div class="gl-table-unassigned-title">No table assigned (${unassigned.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${unassigned.map(g => `
+          <div style="display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:99px;padding:5px 12px 5px 7px;">
+            <div class="gl-table-avatar" style="width:24px;height:24px;font-size:10px;">${escHtml(glInitials(g.name))}</div>
+            <span style="font-size:13px;color:var(--deep);">${escHtml(g.name) || '<em style="color:var(--muted)">Unnamed</em>'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (tableKeys.length === 0 && unassigned.length === 0) {
+    html = '<div style="text-align:center;padding:3rem;color:var(--muted);font-size:14px;">No guests yet. Add guests and assign them to tables.</div>';
+  } else if (tableKeys.length === 0) {
+    html += '<div style="text-align:center;padding:2rem 0;color:var(--muted);font-size:13px;">Assign tables to guests in the All Guests view to see them here.</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function glUpdate(id, field, val) {
+  const g = glGuests.find(x => x.id === id);
+  if (g) { g[field] = val; glSaveState(); glStats(); }
+}
+
+function glUpdateLive(id, field, val) {
+  const g = glGuests.find(x => x.id === id);
+  if (g) {
+    g[field] = val;
+    const av = document.getElementById('gla-' + id);
+    if (av) av.textContent = glInitials(val);
+  }
+}
+
+function glUpdateBadge(id, val) {
+  const badge = document.getElementById('glbadge-' + id);
+  if (badge) {
+    badge.textContent = val;
+    badge.className = 'gl-rsvp-badge ' + glRsvpClass(val);
+  }
+  glStats();
+}
+
+function glRemove(id) {
+  glGuests = glGuests.filter(x => x.id !== id);
+  glSaveState(); glRender();
+}
+
+function glAdd() {
+  glGuests.push({id: glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''});
+  glSaveState(); glRender();
+}
+
+// ─── EXPENSES ────────────────────────────────────────────────
+// Map task label keywords → expense category
+const TASK_CAT_MAP = [
+  { kw: ['venue'], cat: 'Venue' },
+  { kw: ['cater', 'menu', 'dinner', 'dessert', 'cake'], cat: 'Catering' },
+  { kw: ['dress', 'suit', 'fitting', 'attire', 'outfit', 'looks'], cat: 'Attire' },
+  { kw: ['photograph'], cat: 'Photography' },
+  { kw: ['videograph'], cat: 'Videography' },
+  { kw: ['florist', 'floral', 'flower', 'décor', 'decor', 'arrangement'], cat: 'Flowers & Décor' },
+  { kw: ['entertainment'], cat: 'Entertainment' },
+  { kw: ['hair', 'makeup'], cat: 'Hair & Makeup' },
+  { kw: ['invitation', 'save-the-date', 'stationer'], cat: 'Stationery' },
+  { kw: ['transport', 'accommodation', 'hotel'], cat: 'Transport' },
+  { kw: ['ring', 'jewel'], cat: 'Rings & Jewellery' },
+  { kw: ['honeymoon'], cat: 'Accommodation' },
+];
+
+function guessCategory(label) {
+  const l = label.toLowerCase();
+  for (const m of TASK_CAT_MAP) {
+    if (m.kw.some(k => l.includes(k))) return m.cat;
+  }
+  return 'Other';
+}
+
+// Only tasks that realistically have a cost
+const EXPENSE_WORTHY_KEYWORDS = ['book','venue','cater','dress','suit','photograph','videograph','florist','flower','cake','entertainment','hair','makeup','invitation','save-the-date','ring','honeymoon','jewel','accommodation','transport','fitting','menu','décor','decor'];
+
+function isExpenseWorthy(label) {
+  const l = label.toLowerCase();
+  return EXPENSE_WORTHY_KEYWORDS.some(k => l.includes(k));
+}
+
+function exLoadState() {
+  try {
+    const raw = localStorage.getItem('wpa_expenses');
+    if (raw) { const p = JSON.parse(raw); expenses = p.expenses || []; exNextId = p.nextId || expenses.length + 1; }
+  } catch(e) {}
+  expenses.forEach(e => { if (!e.vendor) e.vendor = ''; if (!e.taskIdx === undefined) e.taskIdx = null; });
+  // Auto-add for any already-done tasks not yet represented
+  done.forEach(idx => {
+    if (isExpenseWorthy(allTasks[idx]?.label || '') && !expenses.find(e => e.taskIdx === idx)) {
+      exCreateFromTask(idx, false);
+    }
+  });
+}
+
+function exSaveState() {
+  try { localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId})); } catch(e) {}
+}
+
+function exCreateFromTask(idx, save = true) {
+  const task = allTasks[idx];
+  if (!task) return;
+  expenses.push({
+    id: exNextId++, item: task.label, cat: guessCategory(task.label),
+    estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: idx, fromTask: true
+  });
+  if (save) { exSaveState(); if (document.getElementById('expense-panel').classList.contains('visible')) exRender(); }
+}
+
+function exAutoAdd(idx) {
+  if (!isExpenseWorthy(allTasks[idx]?.label || '')) return;
+  if (expenses.find(e => e.taskIdx === idx)) return; // already exists
+  exCreateFromTask(idx, true);
+  // Badge the tab briefly
+  const tab = document.getElementById('tab-expenses');
+  tab.textContent = 'Expenses ✦';
+  setTimeout(() => { tab.textContent = 'Expenses'; }, 3000);
+}
+
+function exAdd() {
+  expenses.push({id: exNextId++, item: '', cat: 'Other', estimated: '', actual: '', status: 'Planned', vendor: '', taskIdx: null, fromTask: false});
+  exSaveState(); exRender();
+  // Focus first input of new row
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#ex-tbody tr:last-child .ex-cell');
+    if (inputs[0]) inputs[0].focus();
+  }, 50);
+}
+
+function exUpdate(id, field, val) {
+  const e = expenses.find(x => x.id === id);
+  if (e) { e[field] = field === 'estimated' || field === 'actual' ? val : val; exSaveState(); exStats(); }
+}
+
+function exRemove(id) {
+  expenses = expenses.filter(x => x.id !== id);
+  exSaveState(); exRender();
+}
+
+function exStatusClass(s) {
+  if (s === 'Paid in full') return 'ex-status-paid';
+  if (s === 'Deposit paid') return 'ex-status-deposit';
+  return 'ex-status-planned';
+}
+
+function exStats() {
+  const totalEst = expenses.reduce((s, e) => s + (parseFloat(e.estimated) || 0), 0);
+  const totalAct = expenses.reduce((s, e) => s + (parseFloat(e.actual) || 0), 0);
+  const paid = expenses.filter(e => e.status === 'Paid in full').reduce((s, e) => s + (parseFloat(e.actual) || parseFloat(e.estimated) || 0), 0);
+  const remaining = totalEst - paid;
+  const pct = totalEst > 0 ? Math.min(100, Math.round(totalAct / totalEst * 100)) : 0;
+  const over = totalAct > totalEst && totalEst > 0;
+  document.getElementById('ex-stats').innerHTML = `
+    <div class="ex-stat">
+      <div class="ex-stat-label">Budget (estimated)</div>
+      <div class="ex-stat-value">RM ${totalEst ? totalEst.toLocaleString('en-MY', {minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</div>
+      <div class="ex-stat-sub">${expenses.length} line item${expenses.length !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="ex-stat">
+      <div class="ex-stat-label">Actual spend</div>
+      <div class="ex-stat-value ${over ? 'ex-over' : ''}">RM ${totalAct ? totalAct.toLocaleString('en-MY', {minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</div>
+      <div class="ex-stat-sub">${over ? '⚠ Over budget' : pct + '% of estimate'}</div>
+    </div>
+    <div class="ex-stat">
+      <div class="ex-stat-label">Paid in full</div>
+      <div class="ex-stat-value" style="color:var(--sage)">RM ${paid ? paid.toLocaleString('en-MY', {minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</div>
+      <div class="ex-stat-sub">${expenses.filter(e=>e.status==='Paid in full').length} vendor${expenses.filter(e=>e.status==='Paid in full').length !== 1 ? 's' : ''} settled</div>
+    </div>
+    <div class="ex-stat">
+      <div class="ex-stat-label">Still to pay</div>
+      <div class="ex-stat-value" style="color:var(--rose)">RM ${remaining > 0 ? remaining.toLocaleString('en-MY', {minimumFractionDigits:0,maximumFractionDigits:0}) : '—'}</div>
+      <div class="ex-stat-sub">${expenses.filter(e=>e.status!=='Paid in full').length} item${expenses.filter(e=>e.status!=='Paid in full').length !== 1 ? 's' : ''} outstanding</div>
+    </div>
+  `;
+  // Progress bar
+  const wrap = document.getElementById('ex-progress');
+  if (wrap) {
+    wrap.innerHTML = `
+      <div class="ex-progress-label"><span>Budget used</span><span>RM ${totalAct.toLocaleString('en-MY',{maximumFractionDigits:0})} / RM ${totalEst.toLocaleString('en-MY',{maximumFractionDigits:0})}</span></div>
+      <div class="ex-progress-bar"><div class="ex-progress-fill ${over?'over':''}" style="width:${pct}%"></div></div>
+    `;
+  }
+}
+
+function exRender() {
+  const q = (document.getElementById('ex-search')?.value || '').toLowerCase();
+  const fc = document.getElementById('ex-filter-cat')?.value || '';
+  const fs = document.getElementById('ex-filter-status')?.value || '';
+  const filtered = expenses.filter(e => {
+    const match = (e.item||'').toLowerCase().includes(q) || (e.vendor||'').toLowerCase().includes(q) || (e.cat||'').toLowerCase().includes(q);
+    return match && (!fc || e.cat === fc) && (!fs || e.status === fs);
+  });
+
+  const tbody = document.getElementById('ex-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = filtered.map(e => {
+    const taskLabel = e.taskIdx !== null && allTasks[e.taskIdx] ? allTasks[e.taskIdx].label : '';
+    return `
+    <tr class="${e.fromTask ? 'from-task' : ''}">
+      <td><input class="ex-cell" value="${escHtml(e.item)}" placeholder="e.g. Venue deposit" onchange="exUpdate(${e.id},'item',this.value)"></td>
+      <td>
+        <select class="ex-select" onchange="exUpdate(${e.id},'cat',this.value)">
+          ${EX_CATS.map(c => `<option value="${c}" ${e.cat===c?'selected':''}>${escHtml(c)}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        ${taskLabel
+          ? `<button class="ex-task-link" onclick="switchTab('planner');selectTask(${e.taskIdx})" title="${escHtml(taskLabel)}">${escHtml(taskLabel.length > 22 ? taskLabel.slice(0,22)+'…' : taskLabel)}</button>`
+          : `<span style="font-size:12px;color:var(--muted);">—</span>`
+        }
+      </td>
+      <td><input class="ex-cell ex-cell-num" type="number" min="0" value="${escHtml(String(e.estimated))}" placeholder="0" onchange="exUpdate(${e.id},'estimated',this.value);exStats()"></td>
+      <td><input class="ex-cell ex-cell-num" type="number" min="0" value="${escHtml(String(e.actual))}" placeholder="0" onchange="exUpdate(${e.id},'actual',this.value);exStats()"></td>
+      <td>
+        <select class="ex-select" onchange="exUpdate(${e.id},'status',this.value);exStats();document.getElementById('ex-tbody').querySelector('[data-id=\\'${e.id}\\']')">
+          ${EX_STATUS.map(s => `<option value="${s}" ${e.status===s?'selected':''}>${escHtml(s)}</option>`).join('')}
+        </select>
+      </td>
+      <td><input class="ex-cell" value="${escHtml(e.vendor)}" placeholder="Vendor name" onchange="exUpdate(${e.id},'vendor',this.value)"></td>
+      <td><button class="ex-del" onclick="exRemove(${e.id})" title="Remove">×</button></td>
+    </tr>`;
+  }).join('');
+
+  // Footer totals
+  const tfoot = document.getElementById('ex-tfoot');
+  if (tfoot) {
+    const totalEst = filtered.reduce((s, e) => s + (parseFloat(e.estimated)||0), 0);
+    const totalAct = filtered.reduce((s, e) => s + (parseFloat(e.actual)||0), 0);
+    const over = totalAct > totalEst && totalEst > 0;
+    tfoot.innerHTML = `<tr>
+      <td colspan="3" style="color:var(--muted);font-size:12px;">${filtered.length} item${filtered.length!==1?'s':''} shown</td>
+      <td style="text-align:right;font-family:'Cormorant Garamond',serif;font-size:15px;">RM ${totalEst.toLocaleString('en-MY',{maximumFractionDigits:0})}</td>
+      <td style="text-align:right;font-family:'Cormorant Garamond',serif;font-size:15px;${over?'color:var(--rose)':''}">RM ${totalAct.toLocaleString('en-MY',{maximumFractionDigits:0})}</td>
+      <td colspan="3"></td>
+    </tr>`;
+  }
+  exStats();
+}
+</script>
+</body>
+</html>
