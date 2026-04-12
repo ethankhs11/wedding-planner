@@ -726,22 +726,36 @@ function cleanExpense(e) {
   };
 }
 
-// Merge two guest arrays — union by id, local edits win, deleted ids are excluded
+// Merge two guest arrays — deduplicated by id, deleted ids excluded, local wins on conflict
 function mergeGuests(local, remote) {
-  const map = {};
+  const map = new Map();
   const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  remoteArr.forEach(g => { if (!deletedGuests.has(Number(g.id))) map[g.id] = cleanGuest(g); });
-  local.forEach(g => { if (!deletedGuests.has(Number(g.id))) map[g.id] = cleanGuest(g); });
-  return Object.values(map).sort((a, b) => a.id - b.id);
+  // Remote first
+  remoteArr.forEach(g => {
+    const id = Number(g.id);
+    if (!deletedGuests.has(id)) map.set(id, cleanGuest(g));
+  });
+  // Local overwrites (local edits win)
+  local.forEach(g => {
+    const id = Number(g.id);
+    if (!deletedGuests.has(id)) map.set(id, cleanGuest(g));
+  });
+  return [...map.values()].sort((a, b) => a.id - b.id);
 }
 
-// Merge two expense arrays — same pattern
+// Merge two expense arrays — same deduplication pattern
 function mergeExpenses(local, remote) {
-  const map = {};
+  const map = new Map();
   const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  remoteArr.forEach(e => { if (!deletedExpenses.has(Number(e.id))) map[e.id] = cleanExpense(e); });
-  local.forEach(e => { if (!deletedExpenses.has(Number(e.id))) map[e.id] = cleanExpense(e); });
-  return Object.values(map).sort((a, b) => a.id - b.id);
+  remoteArr.forEach(e => {
+    const id = Number(e.id);
+    if (!deletedExpenses.has(id)) map.set(id, cleanExpense(e));
+  });
+  local.forEach(e => {
+    const id = Number(e.id);
+    if (!deletedExpenses.has(id)) map.set(id, cleanExpense(e));
+  });
+  return [...map.values()].sort((a, b) => a.id - b.id);
 }
 
 async function syncPush() {
@@ -1529,10 +1543,15 @@ function glLoadState() {
     const raw = localStorage.getItem('wpa_guests');
     if (raw) { const parsed = JSON.parse(raw); glGuests = parsed.guests || []; glNextId = parsed.nextId || glGuests.length + 1; }
   } catch(e) {}
+  // Deduplicate by id
+  const seen = new Set();
+  glGuests = glGuests.filter(g => {
+    const id = Number(g.id);
+    if (seen.has(id) || deletedGuests.has(id)) return false;
+    seen.add(id); return true;
+  });
   if (glGuests.length === 0) {
-    glGuests = [
-      {id:glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''},
-    ];
+    glGuests = [{id:glNextId++, name:'', email:'', rsvp:'Pending', meal:'Standard', table:'', phone:'', side:''}];
   }
   glGuests.forEach(g => { if (!g.side) g.side = ''; });
 }
@@ -1797,7 +1816,14 @@ function exLoadState() {
     const raw = localStorage.getItem('wpa_expenses');
     if (raw) { const p = JSON.parse(raw); expenses = p.expenses || []; exNextId = p.nextId || expenses.length + 1; }
   } catch(e) {}
-  expenses.forEach(e => { if (!e.vendor) e.vendor = ''; if (!e.taskIdx === undefined) e.taskIdx = null; });
+  // Deduplicate by id
+  const seen = new Set();
+  expenses = expenses.filter(e => {
+    const id = Number(e.id);
+    if (seen.has(id) || deletedExpenses.has(id)) return false;
+    seen.add(id); return true;
+  });
+  expenses.forEach(e => { if (!e.vendor) e.vendor = ''; if (e.taskIdx === undefined) e.taskIdx = null; });
   // Auto-add for any already-done tasks not yet represented
   done.forEach(idx => {
     if (isExpenseWorthy(allTasks[idx]?.label || '') && !expenses.find(e => e.taskIdx === idx)) {
@@ -1954,4 +1980,3 @@ function exRender() {
 </script>
 </body>
 </html>
-
