@@ -726,14 +726,12 @@ function cleanExpense(e) {
   };
 }
 
-// Merge two guest arrays — union by id, local edits win for existing ids
+// Merge two guest arrays — union by id, local edits win, deleted ids are excluded
 function mergeGuests(local, remote) {
   const map = {};
-  // Start with remote
   const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  remoteArr.forEach(g => { map[g.id] = cleanGuest(g); });
-  // Local overwrites (local edits win)
-  local.forEach(g => { map[g.id] = cleanGuest(g); });
+  remoteArr.forEach(g => { if (!deletedGuests.has(Number(g.id))) map[g.id] = cleanGuest(g); });
+  local.forEach(g => { if (!deletedGuests.has(Number(g.id))) map[g.id] = cleanGuest(g); });
   return Object.values(map).sort((a, b) => a.id - b.id);
 }
 
@@ -741,8 +739,8 @@ function mergeGuests(local, remote) {
 function mergeExpenses(local, remote) {
   const map = {};
   const remoteArr = Array.isArray(remote) ? remote : Object.values(remote || {});
-  remoteArr.forEach(e => { map[e.id] = cleanExpense(e); });
-  local.forEach(e => { map[e.id] = cleanExpense(e); });
+  remoteArr.forEach(e => { if (!deletedExpenses.has(Number(e.id))) map[e.id] = cleanExpense(e); });
+  local.forEach(e => { if (!deletedExpenses.has(Number(e.id))) map[e.id] = cleanExpense(e); });
   return Object.values(map).sort((a, b) => a.id - b.id);
 }
 
@@ -758,6 +756,12 @@ async function syncPush() {
     }
 
     // 2. Merge: combine remote + local, local edits win on conflicts
+    // Merge tombstones first so deleted IDs are excluded from guest/expense merge
+    const remoteDeletedGuests = Array.isArray(remote?.deletedGuests) ? remote.deletedGuests : [];
+    const remoteDeletedExpenses = Array.isArray(remote?.deletedExpenses) ? remote.deletedExpenses : [];
+    remoteDeletedGuests.forEach(id => deletedGuests.add(Number(id)));
+    remoteDeletedExpenses.forEach(id => deletedExpenses.add(Number(id)));
+
     const mergedGuests = mergeGuests(glGuests, remote?.guests?.guests || []);
     const mergedExpenses = mergeExpenses(expenses, remote?.expenses?.expenses || []);
     const mergedDone = [...new Set([...(remote?.done || []), ...done])];
@@ -780,6 +784,8 @@ async function syncPush() {
       uploadedTasks: mergedUploaded,
       guests: { guests: mergedGuests, nextId: glNextId },
       expenses: { expenses: mergedExpenses, nextId: exNextId },
+      deletedGuests: [...deletedGuests],
+      deletedExpenses: [...deletedExpenses],
       lastSaved: new Date().toISOString()
     };
     const writeResp = await fetch(fbEndpoint('wpa_data'), {
@@ -819,18 +825,22 @@ async function syncPush() {
 function applyCleanRemote(raw) {
   if (!raw || !raw.lastSaved) return false;
 
+  // Absorb remote tombstones first
+  if (Array.isArray(raw.deletedGuests)) raw.deletedGuests.forEach(id => deletedGuests.add(Number(id)));
+  if (Array.isArray(raw.deletedExpenses)) raw.deletedExpenses.forEach(id => deletedExpenses.add(Number(id)));
+
   // Task progress
   if (Array.isArray(raw.done)) raw.done.forEach(i => done.add(i));
   if (raw.chatHistory) Object.assign(chatHistory, raw.chatHistory);
   if (Array.isArray(raw.uploadedTasks)) raw.uploadedTasks.forEach(i => uploadedTasks.add(i));
 
-  // Guests — merge remote into local (remote adds new guests, local edits win)
+  // Guests — merge (tombstones already updated above, mergeGuests will exclude deleted)
   if (raw.guests?.guests) {
     glGuests = mergeGuests(glGuests, raw.guests.guests);
     glNextId = Math.max(glNextId, Number(raw.guests.nextId) || 1);
   }
 
-  // Expenses — same merge
+  // Expenses — same
   if (raw.expenses?.expenses) {
     expenses = mergeExpenses(expenses, raw.expenses.expenses);
     exNextId = Math.max(exNextId, Number(raw.expenses.nextId) || 1);
@@ -843,6 +853,8 @@ function applyCleanRemote(raw) {
     localStorage.setItem('wpa_chatHistory', JSON.stringify(chatHistory));
     localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId}));
     localStorage.setItem('wpa_expenses', JSON.stringify({expenses, nextId: exNextId}));
+    localStorage.setItem('wpa_deletedGuests', JSON.stringify([...deletedGuests]));
+    localStorage.setItem('wpa_deletedExpenses', JSON.stringify([...deletedExpenses]));
   } catch(e) {}
 
   buildSidebar();
@@ -1027,6 +1039,10 @@ function loadState() {
     }
     const prof = localStorage.getItem('wpa_profile');
     if (prof) Object.assign(weddingProfile, JSON.parse(prof));
+    const dg = localStorage.getItem('wpa_deletedGuests');
+    if (dg) JSON.parse(dg).forEach(id => deletedGuests.add(Number(id)));
+    const de = localStorage.getItem('wpa_deletedExpenses');
+    if (de) JSON.parse(de).forEach(id => deletedExpenses.add(Number(id)));
   } catch(e) {}
 }
 
@@ -1040,11 +1056,13 @@ const GL_RSVP = ['Confirmed','Pending','Declined'];
 const GL_MEAL = ['Standard','Vegetarian','Vegan','Gluten-free'];
 let glGuests = [];
 let glNextId = 1;
+let deletedGuests = new Set(); // tombstone: IDs that have been deleted
 // Expense state — declared here so sync functions can access them immediately
 const EX_STATUS = ['Planned', 'Deposit paid', 'Paid in full'];
 const EX_CATS = ['Venue','Catering','Attire','Photography','Videography','Flowers & Décor','Entertainment','Hair & Makeup','Stationery','Transport','Accommodation','Rings & Jewellery','Cake & Desserts','Other'];
 let expenses = [];
 let exNextId = 1;
+let deletedExpenses = new Set(); // tombstone: IDs that have been deleted
 // Shared wedding profile — built up as couple answers questions
 let weddingProfile = {
   guestCount: "~30 guests",
@@ -1730,7 +1748,9 @@ function glUpdateBadge(id, val) {
 }
 
 function glRemove(id) {
+  deletedGuests.add(Number(id));
   glGuests = glGuests.filter(x => x.id !== id);
+  try { localStorage.setItem('wpa_deletedGuests', JSON.stringify([...deletedGuests])); } catch(e) {}
   glSaveState(); glRender();
 }
 
@@ -1826,7 +1846,9 @@ function exUpdate(id, field, val) {
 }
 
 function exRemove(id) {
+  deletedExpenses.add(Number(id));
   expenses = expenses.filter(x => x.id !== id);
+  try { localStorage.setItem('wpa_deletedExpenses', JSON.stringify([...deletedExpenses])); } catch(e) {}
   exSaveState(); exRender();
 }
 
@@ -1932,3 +1954,4 @@ function exRender() {
 </script>
 </body>
 </html>
+
