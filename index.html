@@ -592,8 +592,9 @@
             <div class="gl-tracker-sub">Max 10 pax per table · auto-updates from Table # field</div>
           </div>
           <div class="gl-tracker-actions">
-            <button class="gl-tracker-btn" onclick="glAddTable()">+ Add table</button>
-            <button class="gl-tracker-btn" onclick="glRemoveTable()">− Remove last</button>
+            <span id="gl-sync-status" style="font-size:11px;color:var(--muted);">Loading…</span>
+            <button class="gl-tracker-btn" onclick="glFetchCSV(true)">↻ Refresh</button>
+            <a class="gl-tracker-btn" href="https://docs.google.com/spreadsheets/d/1r3891D2MMgpZg5TeAXn0iFH_EYIIEJsTmBL7plLqcPc/edit" target="_blank" style="text-decoration:none;">Open in Sheets ↗</a>
           </div>
         </div>
         <div class="gl-tracker-grid" id="gl-tracker-grid"></div>
@@ -625,8 +626,7 @@
             <option value="">All tables</option>
             <option value="unassigned">Unassigned</option>
           </select>
-          <button class="btn primary" onclick="glAdd('Groom')">+ Groom's side</button>
-          <button class="btn primary" onclick="glAdd('Bride')">+ Bride's side</button>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#FAEEDA;border-radius:99px;white-space:nowrap;">🔒 Read-only · edit in Google Sheets</span>
         </div>
         <div id="gl-cards" class="gl-cards"></div>
       </div>
@@ -700,6 +700,9 @@
 <script>
 const FOLDER_ID = "1B-TuSHzVw5kIU4hopZGgskPxOLUYgMBn";
 const FOLDER_URL = "https://drive.google.com/drive/folders/" + FOLDER_ID;
+const GUEST_SHEET_ID = "1r3891D2MMgpZg5TeAXn0iFH_EYIIEJsTmBL7plLqcPc";
+const GUEST_SHEET_URL = "https://docs.google.com/spreadsheets/d/" + GUEST_SHEET_ID + "/edit";
+const GUEST_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS_fWnrGX5I9TOrQA-iXDs60V8JD6-pVTDYZAH6VyTJYflxN2rZJJvxQh9mwXOy2AgaLqCilRpCwZzj/pub?output=csv";
 let API_KEY = "";
 
 function saveKey() {
@@ -792,8 +795,8 @@ async function syncPush() {
 async function fbPullAll() {
   if(!FB_URL)return false;
   try {
-    const [gR,eR,pR]=await Promise.all([fetch(fbEndpoint('wpa_guests')),fetch(fbEndpoint('wpa_expenses')),fetch(fbEndpoint('wpa_planning'))]);
-    if(gR.ok){const raw=await gR.json(); if(raw&&typeof raw==='object'){const m=new Map(); Object.values(raw).map(cleanGuest).forEach(g=>m.set(g.id,g)); glGuests=[...m.values()].sort((a,b)=>a.id-b.id);}else{glGuests=[];}}
+    const [eR,pR]=await Promise.all([fetch(fbEndpoint('wpa_expenses')),fetch(fbEndpoint('wpa_planning'))]);
+    // Guests come from CSV, not Firebase
     if(eR.ok){const raw=await eR.json(); if(raw&&typeof raw==='object'){const m=new Map(); Object.values(raw).map(cleanExpense).forEach(e=>m.set(e.id,e)); expenses=[...m.values()].sort((a,b)=>a.id-b.id);}else{expenses=[];}}
     if(pR.ok){const p=await pR.json(); if(p){if(Array.isArray(p.done))p.done.forEach(i=>done.add(i)); if(p.chatHistory)Object.assign(chatHistory,p.chatHistory); if(Array.isArray(p.uploadedTasks))p.uploadedTasks.forEach(i=>uploadedTasks.add(i)); if(p.guestNextId)glNextId=Math.max(glNextId,Number(p.guestNextId)); if(p.expenseNextId)exNextId=Math.max(exNextId,Number(p.expenseNextId)); if(p.tableCount)glTableCount=Math.max(glTableCount,Number(p.tableCount)); if(p.lastSaved)lastRemoteHash=p.lastSaved;}}
     try{localStorage.setItem('wpa_guests',JSON.stringify({guests:glGuests,nextId:glNextId,tableCount:glTableCount}));localStorage.setItem('wpa_expenses',JSON.stringify({expenses,nextId:exNextId}));localStorage.setItem('wpa_done',JSON.stringify([...done]));localStorage.setItem('wpa_chatHistory',JSON.stringify(chatHistory));}catch(e){}
@@ -1436,27 +1439,90 @@ function glMigrate(g) {
 }
 
 function glLoadState() {
+  // CSV is source of truth. Load cache first for instant render, then refresh from CSV.
   try {
     const raw = localStorage.getItem('wpa_guests');
     if (raw) {
       const parsed = JSON.parse(raw);
       glGuests = (parsed.guests || []).map(glMigrate);
-      glNextId = parsed.nextId || glGuests.length + 1;
-      if (parsed.tableCount) glTableCount = Math.max(1, Number(parsed.tableCount));
+      if (parsed.tableCount) glTableCount = Math.max(6, Number(parsed.tableCount));
     }
   } catch(e) {}
-  const seen = new Set();
-  glGuests = glGuests.filter(g => {
-    const id = Number(g.id);
-    if (seen.has(id) || deletedGuests.has(id)) return false;
-    seen.add(id); return true;
-  });
+  glFetchCSV(false);
+  setInterval(() => {
+    const tabActive = document.getElementById('tab-guests')?.classList.contains('active');
+    if (tabActive) glFetchCSV(false);
+  }, 60000);
 }
 
-function glSaveState() {
-  try { localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glNextId, tableCount: glTableCount})); } catch(e) {}
-  clearTimeout(syncPushTimer);
-  syncPushTimer = setTimeout(syncPush, 1500);
+function glSaveState() { /* Read-only mode: CSV is source of truth */ }
+
+function parseCSV(text) {
+  const rows = [];
+  let cur = '', row = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else if (c === '\r') { /* skip */ }
+      else cur += c;
+    }
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+async function glFetchCSV(showStatus) {
+  const statusEl = document.getElementById('gl-sync-status');
+  if (!GUEST_CSV_URL) {
+    if (statusEl) { statusEl.textContent = 'No CSV URL'; statusEl.style.color = 'var(--rose)'; }
+    return;
+  }
+  if (showStatus && statusEl) { statusEl.textContent = 'Refreshing…'; statusEl.style.color = 'var(--muted)'; }
+  try {
+    const resp = await fetch(GUEST_CSV_URL + '&_=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    const rows = parseCSV(text);
+    // Find header row (contains "Primary Contact")
+    let headerIdx = rows.findIndex(r => r.some(c => /primary contact/i.test(String(c))));
+    if (headerIdx < 0) headerIdx = 3; // fallback: row 4 (0-indexed 3)
+    const dataRows = rows.slice(headerIdx + 1).filter(r => r.length >= 2 && r[1] && String(r[1]).trim());
+    const newGuests = dataRows.map((r, i) => ({
+      id: i + 1,
+      primaryContact: (r[1] || '').trim(),
+      side: (r[2] || '').trim(),
+      relationship: (r[3] || '').trim(),
+      pax: Math.max(1, Number(r[4]) || 1),
+      guestNames: (r[5] || '').trim(),
+      table: String((r[6] || '').trim()),
+      dietary: (r[7] || '').trim(),
+      rsvp: (r[8] || 'Pending').trim() || 'Pending',
+      contact: (r[9] || '').trim(),
+      inviteSent: (r[10] || '').trim(),
+      notes: (r[11] || '').trim()
+    }));
+    glGuests = newGuests;
+    const maxTable = glGuests.reduce((m, g) => Math.max(m, Number(g.table) || 0), 0);
+    glTableCount = Math.max(6, maxTable);
+    try { localStorage.setItem('wpa_guests', JSON.stringify({guests: glGuests, nextId: glGuests.length+1, tableCount: glTableCount})); } catch(e) {}
+    if (statusEl) {
+      statusEl.textContent = 'Synced ' + new Date().toLocaleTimeString('en-MY', {hour:'2-digit',minute:'2-digit'});
+      statusEl.style.color = 'var(--sage)';
+    }
+    glRender();
+  } catch(e) {
+    if (statusEl) {
+      statusEl.textContent = 'Sync failed: ' + e.message;
+      statusEl.style.color = 'var(--rose)';
+    }
+    console.error('glFetchCSV:', e);
+  }
 }
 
 function glPaxSum(filter) {
@@ -1625,79 +1691,55 @@ function glRender() {
     const tnum = Number(g.table);
     const tablePax = tnum ? glTablePax(tnum) : 0;
     const over = tnum && tablePax > TABLE_CAPACITY;
+    const sideLabel = g.side === 'Groom' ? "Groom's side" : g.side === 'Bride' ? "Bride's side" : '— Unassigned —';
+    const tableLabel = g.table ? `Table ${g.table}` : '— Unassigned —';
     return `
     <div class="gl-card" id="glcard-${g.id}">
       <div class="gl-card-top">
-        <div class="gl-avatar" id="gla-${g.id}">${escHtml(glInitials(g.primaryContact))}</div>
-        <input class="gl-name-input" value="${escHtml(g.primaryContact)}" placeholder="Primary contact name"
-          oninput="glUpdateLive(${g.id},'primaryContact',this.value)"
-          onchange="glUpdate(${g.id},'primaryContact',this.value)">
+        <div class="gl-avatar">${escHtml(glInitials(g.primaryContact))}</div>
+        <div class="gl-name-input" style="flex:1;border-bottom:none;">${escHtml(g.primaryContact) || '<span style="color:var(--muted);font-weight:400;">(no name)</span>'}</div>
         <span class="gl-pax-badge"><strong>${g.pax}</strong> pax</span>
       </div>
       <div class="gl-card-fields">
         <div class="gl-field">
           <div class="gl-field-label">Side</div>
-          <select class="gl-field-input" onchange="glUpdate(${g.id},'side',this.value);glUpdateSideBadge(${g.id},this.value)">
-            <option value="" ${!g.side?'selected':''}>— Unassigned —</option>
-            <option value="Groom" ${g.side==='Groom'?'selected':''}>Groom's side</option>
-            <option value="Bride" ${g.side==='Bride'?'selected':''}>Bride's side</option>
-          </select>
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${escHtml(sideLabel)}</div>
         </div>
         <div class="gl-field">
           <div class="gl-field-label">Relationship</div>
-          <input class="gl-field-input" value="${escHtml(g.relationship)}" placeholder="e.g. Family, Close friend, Work"
-            onchange="glUpdate(${g.id},'relationship',this.value)">
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${escHtml(g.relationship) || '<span style="color:var(--muted);">—</span>'}</div>
         </div>
         <div class="gl-field">
-          <div class="gl-field-label">Pax (people in party)</div>
-          <input class="gl-field-input" type="number" min="1" value="${g.pax}" placeholder="1"
-            onchange="glUpdatePax(${g.id},this.value)">
+          <div class="gl-field-label">Pax</div>
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${g.pax}</div>
         </div>
         <div class="gl-field">
           <div class="gl-field-label">Table ${over ? '⚠ over capacity' : ''}</div>
-          <select class="gl-field-input ${over?'over':''}" onchange="glUpdateTable(${g.id},this.value)">
-            <option value="" ${!g.table?'selected':''}>— Unassigned —</option>
-            ${tableOpts.map(n => {
-              const usedIfOther = glTablePax(n) - (Number(g.table)===n ? Number(g.pax)||0 : 0);
-              const remaining = TABLE_CAPACITY - usedIfOther;
-              const label = `Table ${n} (${usedIfOther}/${TABLE_CAPACITY})`;
-              return `<option value="${n}" ${Number(g.table)===n?'selected':''}>${label}</option>`;
-            }).join('')}
-          </select>
+          <div class="gl-field-input ${over?'over':''}" style="background:transparent;border-color:transparent;padding:8px 0;${over?'color:#993C1D;':''}">${escHtml(tableLabel)}${tnum?` <span style="color:var(--muted);font-size:11px;">(${tablePax}/${TABLE_CAPACITY})</span>`:''}</div>
         </div>
         <div class="gl-field full">
           <div class="gl-field-label">Guest names in party</div>
-          <textarea class="gl-field-input" placeholder="e.g. John Lim, Sarah Lim, Mike Lim, Emma Lim"
-            onchange="glUpdate(${g.id},'guestNames',this.value)">${escHtml(g.guestNames)}</textarea>
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;white-space:pre-wrap;">${escHtml(g.guestNames) || '<span style="color:var(--muted);">—</span>'}</div>
         </div>
         <div class="gl-field">
           <div class="gl-field-label">Dietary</div>
-          <input class="gl-field-input" value="${escHtml(g.dietary)}" placeholder="None / Halal / Veg / etc"
-            onchange="glUpdate(${g.id},'dietary',this.value)">
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${escHtml(g.dietary) || '<span style="color:var(--muted);">—</span>'}</div>
         </div>
         <div class="gl-field">
           <div class="gl-field-label">Contact</div>
-          <input class="gl-field-input" value="${escHtml(g.contact)}" placeholder="Phone or email"
-            onchange="glUpdate(${g.id},'contact',this.value)">
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${escHtml(g.contact) || '<span style="color:var(--muted);">—</span>'}</div>
         </div>
-        <div class="gl-field full">
+        ${g.notes ? `<div class="gl-field full">
           <div class="gl-field-label">Notes</div>
-          <input class="gl-field-input" value="${escHtml(g.notes)}" placeholder="Anything worth remembering"
-            onchange="glUpdate(${g.id},'notes',this.value)">
-        </div>
-        <div class="gl-field full">
-          <div class="gl-field-label">RSVP status</div>
-          <select class="gl-field-input" onchange="glUpdate(${g.id},'rsvp',this.value);glUpdateBadge(${g.id},this.value)">
-            ${GL_RSVP.map(o => `<option value="${o}" ${g.rsvp===o?'selected':''}>${o}</option>`).join('')}
-          </select>
-        </div>
+          <div class="gl-field-input" style="background:transparent;border-color:transparent;padding:8px 0;">${escHtml(g.notes)}</div>
+        </div>` : ''}
       </div>
       <div class="gl-card-footer">
         <div class="gl-card-footer-left">
-          <span id="glside-${g.id}">${glSideBadge(g.side)}</span>
-          <span class="gl-rsvp-badge ${glRsvpClass(g.rsvp)}" id="glbadge-${g.id}">${escHtml(g.rsvp)}</span>
+          ${glSideBadge(g.side)}
+          <span class="gl-rsvp-badge ${glRsvpClass(g.rsvp)}">${escHtml(g.rsvp)}</span>
+          ${g.inviteSent && g.inviteSent.toLowerCase() === 'yes' ? '<span class="gl-rsvp-badge gl-rsvp-confirmed" style="font-size:10px;">✉ Sent</span>' : ''}
         </div>
-        <button class="gl-del" onclick="glRemove(${g.id})">Remove</button>
       </div>
     </div>`;
   }).join('');
