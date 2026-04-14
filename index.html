@@ -982,6 +982,7 @@ const TABLE_CAPACITY = 10;
 let glGuests = [];
 let glNextId = 1;
 let glTableCount = 6;
+let glCurrentView = 'guests';
 let deletedGuests = new Set();
 
 const EX_STATUS = ['Planned', 'Deposit paid', 'Paid in full'];
@@ -1643,8 +1644,6 @@ function glRsvpClass(rsvp) {
   if (rsvp === 'Maybe') return 'gl-rsvp-maybe';
   return 'gl-rsvp-pending';
 }
-
-let glCurrentView = 'guests';
 
 function glSwitchView(view) {
   glCurrentView = view;
