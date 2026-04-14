@@ -1516,6 +1516,7 @@ async function glFetchCSV(showStatus) {
       statusEl.style.color = 'var(--sage)';
     }
     glRender();
+    if (glCurrentView === 'tables') glRenderTables();
   } catch(e) {
     if (statusEl) {
       statusEl.textContent = 'Sync failed: ' + e.message;
@@ -1745,6 +1746,7 @@ function glRender() {
   }).join('');
   glStats();
   glRenderTracker();
+  glRenderTables();
 }
 
 function glUpdateSideBadge(id, val) {
